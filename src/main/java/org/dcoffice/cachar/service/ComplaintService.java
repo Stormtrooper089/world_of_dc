@@ -42,7 +42,7 @@ public class ComplaintService {
         // Save complaint first
         Complaint savedComplaint = complaintRepository.save(complaint);
         logger.info("Created complaint: {} for citizen: {}", savedComplaint.getComplaintNumber(),
-                savedComplaint.getCitizen().getMobileNumber());
+                savedComplaint.getCitizenId());
 
         // Handle file uploads
         if (files != null && !files.isEmpty()) {
@@ -68,8 +68,8 @@ public class ComplaintService {
 
         ComplaintStatus previousStatus = complaint.getStatus();
 
-        complaint.setAssignedTo(officer);
-        complaint.setAssignedBy(assignedBy);
+        complaint.setAssignedToId(officer.getId());
+        complaint.setAssignedById(assignedBy.getId());
         complaint.setAssignmentRemarks(remarks);
         complaint.setAssignedAt(LocalDateTime.now());
         complaint.setStatus(ComplaintStatus.ASSIGNED);
@@ -107,11 +107,11 @@ public class ComplaintService {
     }
 
     public List<Complaint> getComplaintsByCitizen(Long citizenId) {
-        return complaintRepository.findByCitizenId(citizenId);
+        return complaintRepository.findByCitizenId(String.valueOf(citizenId));
     }
 
     public List<Complaint> getComplaintsByOfficer(Long officerId) {
-        return complaintRepository.findByAssignedToId(officerId);
+        return complaintRepository.findByAssignedToId(String.valueOf(officerId));
     }
 
     public List<Complaint> getUnassignedComplaints() {
@@ -136,7 +136,7 @@ public class ComplaintService {
     }
 
     public Complaint getComplaintById(Long id) {
-        return complaintRepository.findById(id)
+        return complaintRepository.findById(String.valueOf(id))
                 .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with ID: " + id));
     }
 
@@ -150,7 +150,7 @@ public class ComplaintService {
     }
 
     public Long getActiveComplaintsByOfficer(Long officerId) {
-        return complaintRepository.countActiveComplaintsByOfficer(officerId);
+        return complaintRepository.countActiveComplaintsByOfficer(String.valueOf(officerId));
     }
 
     public Long getComplaintsInDateRange(LocalDateTime startDate, LocalDateTime endDate) {

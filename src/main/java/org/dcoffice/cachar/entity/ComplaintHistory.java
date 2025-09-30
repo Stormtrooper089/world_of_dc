@@ -1,52 +1,40 @@
 package org.dcoffice.cachar.entity;
-
-import com.fasterxml.jackson.annotation.JsonBackReference;
-
-import javax.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "complaint_history")
 public class ComplaintHistory {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "complaint_id", nullable = false)
-    @JsonBackReference
-    private Complaint complaint;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "officer_id")
-    private Officer officer;
-
-    @Enumerated(EnumType.STRING)
+    private String id;
+    private String officerId;
+    private String officerName;
+    private String officerDesignation;
     private ComplaintStatus previousStatus;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private ComplaintStatus newStatus;
-
-    @Column(length = 1000)
     private String remarks;
-
-    @Column(nullable = false)
     private LocalDateTime timestamp;
+    private Long complaintId;
+    public Long getComplaintId() {
+        return complaintId;
+    }
 
+    public void setComplaintId(Long complaintId) {
+        this.complaintId = complaintId;
+    }
     public ComplaintHistory() {
         this.timestamp = LocalDateTime.now();
     }
 
     // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
-    public Complaint getComplaint() { return complaint; }
-    public void setComplaint(Complaint complaint) { this.complaint = complaint; }
+    public String getOfficerId() { return officerId; }
+    public void setOfficerId(String officerId) { this.officerId = officerId; }
 
-    public Officer getOfficer() { return officer; }
-    public void setOfficer(Officer officer) { this.officer = officer; }
+    public String getOfficerName() { return officerName; }
+    public void setOfficerName(String officerName) { this.officerName = officerName; }
+
+    public String getOfficerDesignation() { return officerDesignation; }
+    public void setOfficerDesignation(String officerDesignation) { this.officerDesignation = officerDesignation; }
 
     public ComplaintStatus getPreviousStatus() { return previousStatus; }
     public void setPreviousStatus(ComplaintStatus previousStatus) { this.previousStatus = previousStatus; }

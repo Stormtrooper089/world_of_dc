@@ -37,7 +37,7 @@ public class OfficerController {
             // In production, get current officer from security context
             // For demo, we'll use a dummy district commissioner
             Officer assignedBy = new Officer();
-            assignedBy.setId(1L);
+            assignedBy.setId(String.valueOf(1L));
             assignedBy.setName("District Commissioner");
             assignedBy.setRole(OfficerRole.DISTRICT_COMMISSIONER);
 

@@ -51,7 +51,7 @@ public class CitizenController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<Long>> registerCitizen(@Valid @RequestBody Citizen citizen) {
+    public ResponseEntity<ApiResponse<String>> registerCitizen(@Valid @RequestBody Citizen citizen) {
         try {
             // Verify that mobile number is already verified
             if (!citizenService.isCitizenVerified(citizen.getMobileNumber())) {

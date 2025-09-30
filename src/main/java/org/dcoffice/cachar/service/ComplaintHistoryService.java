@@ -21,8 +21,8 @@ public class ComplaintHistoryService {
                                                ComplaintStatus previousStatus, ComplaintStatus newStatus,
                                                String remarks) {
         ComplaintHistory history = new ComplaintHistory();
-        history.setComplaint(complaint);
-        history.setOfficer(officer);
+        history.setId(complaint.getId());
+        history.setOfficerId(officer.getId());
         history.setPreviousStatus(previousStatus);
         history.setNewStatus(newStatus);
         history.setRemarks(remarks);

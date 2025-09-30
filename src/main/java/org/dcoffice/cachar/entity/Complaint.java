@@ -1,79 +1,64 @@
 package org.dcoffice.cachar.entity;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-
-import javax.persistence.*;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Entity
-@Table(name = "complaints")
+@Document(collection = "complaints")
 public class Complaint {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Id
+    private String id;
+
+
+
+    @Indexed(unique = true)
+    private Long complaintId;
+
+    @Indexed(unique = true)
     private String complaintNumber;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "citizen_id", nullable = false)
-    @JsonBackReference
-    private Citizen citizen;
+    // Store citizen ID instead of reference
+    @Indexed
+    private String citizenId;
 
     @NotBlank(message = "Subject is required")
-    @Column(nullable = false)
     private String subject;
 
     @NotBlank(message = "Description is required")
-    @Column(length = 2000, nullable = false)
     private String description;
 
-    @Enumerated(EnumType.STRING)
     @NotNull(message = "Category is required")
-    @Column(nullable = false)
+    @Indexed
     private ComplaintCategory category;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private Priority priority = Priority.MEDIUM;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Indexed
     private ComplaintStatus status = ComplaintStatus.SUBMITTED;
 
     private String location;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_to")
-    @JsonBackReference
-    private Officer assignedTo;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_by")
-    @JsonBackReference
-    private Officer assignedBy;
+    // Store officer IDs instead of references
+    @Indexed
+    private String assignedToId;
+    private String assignedById;
 
     private String assignmentRemarks;
     private LocalDateTime assignedAt;
 
-    @Column(nullable = false)
+    @Indexed
     private LocalDateTime createdAt;
-
-    @Column(nullable = false)
     private LocalDateTime updatedAt;
-
     private LocalDateTime closedAt;
 
-    @OneToMany(mappedBy = "complaint", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonManagedReference
+    // Embedded documents for better performance
     private List<ComplaintDocument> documents;
-
-    @OneToMany(mappedBy = "complaint", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonManagedReference
     private List<ComplaintHistory> history;
 
     public Complaint() {
@@ -81,25 +66,15 @@ public class Complaint {
         this.updatedAt = LocalDateTime.now();
     }
 
-    @PreUpdate
-    public void preUpdate() {
-        this.updatedAt = LocalDateTime.now();
-        if (status == ComplaintStatus.CLOSED || status == ComplaintStatus.RESOLVED) {
-            if (this.closedAt == null) {
-                this.closedAt = LocalDateTime.now();
-            }
-        }
-    }
-
     // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
     public String getComplaintNumber() { return complaintNumber; }
     public void setComplaintNumber(String complaintNumber) { this.complaintNumber = complaintNumber; }
 
-    public Citizen getCitizen() { return citizen; }
-    public void setCitizen(Citizen citizen) { this.citizen = citizen; }
+    public String getCitizenId() { return citizenId; }
+    public void setCitizenId(String citizenId) { this.citizenId = citizenId; }
 
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
@@ -112,18 +87,32 @@ public class Complaint {
 
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
+    public Long getComplaintId() {
+        return complaintId;
+    }
 
+    public void setComplaintId(Long complaintId) {
+        this.complaintId = complaintId;
+    }
     public ComplaintStatus getStatus() { return status; }
-    public void setStatus(ComplaintStatus status) { this.status = status; }
+    public void setStatus(ComplaintStatus status) {
+        this.status = status;
+        this.updatedAt = LocalDateTime.now();
+        if (status == ComplaintStatus.CLOSED || status == ComplaintStatus.RESOLVED) {
+            if (this.closedAt == null) {
+                this.closedAt = LocalDateTime.now();
+            }
+        }
+    }
 
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
 
-    public Officer getAssignedTo() { return assignedTo; }
-    public void setAssignedTo(Officer assignedTo) { this.assignedTo = assignedTo; }
+    public String getAssignedToId() { return assignedToId; }
+    public void setAssignedToId(String assignedToId) { this.assignedToId = assignedToId; }
 
-    public Officer getAssignedBy() { return assignedBy; }
-    public void setAssignedBy(Officer assignedBy) { this.assignedBy = assignedBy; }
+    public String getAssignedById() { return assignedById; }
+    public void setAssignedById(String assignedById) { this.assignedById = assignedById; }
 
     public String getAssignmentRemarks() { return assignmentRemarks; }
     public void setAssignmentRemarks(String assignmentRemarks) { this.assignmentRemarks = assignmentRemarks; }

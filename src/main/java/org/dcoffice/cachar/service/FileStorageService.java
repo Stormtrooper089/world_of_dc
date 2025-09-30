@@ -80,7 +80,7 @@ public class FileStorageService {
 
             // Save file metadata
             ComplaintDocument document = new ComplaintDocument();
-            document.setComplaint(complaint);
+            document.setId(complaint.getId());
             document.setFileName(fileName);
             document.setOriginalFileName(originalFileName);
             document.setFileType(file.getContentType());

@@ -58,7 +58,7 @@ public class ComplaintController {
 
             // Create complaint object
             Complaint complaint = new Complaint();
-            complaint.setCitizen(citizen);
+            complaint.setCitizenId(citizen.getId());
             complaint.setSubject(subject);
             complaint.setDescription(description);
             complaint.setCategory(category);
@@ -89,7 +89,7 @@ public class ComplaintController {
                 return ResponseEntity.notFound().build();
             }
 
-            List<Complaint> complaints = complaintService.getComplaintsByCitizen(citizenOpt.get().getId());
+            List<Complaint> complaints = complaintService.getComplaintsByCitizen(Long.valueOf(citizenOpt.get().getId()));
             return ResponseEntity.ok(ApiResponse.success("Complaints retrieved successfully", complaints));
 
         } catch (Exception e) {
@@ -106,8 +106,8 @@ public class ComplaintController {
 
             if (complaintOpt.isPresent()) {
                 Complaint complaint = complaintOpt.get();
-                List<ComplaintHistory> history = complaintHistoryService.getComplaintHistory(complaint.getId());
-                List<ComplaintDocument> documents = fileStorageService.getComplaintDocuments(complaint.getId());
+                List<ComplaintHistory> history = complaintHistoryService.getComplaintHistory(Long.valueOf(complaint.getId()));
+                List<ComplaintDocument> documents = fileStorageService.getComplaintDocuments(Long.valueOf(complaint.getId()));
 
                 Map<String, Object> response = new HashMap<>();
                 response.put("complaint", complaint);

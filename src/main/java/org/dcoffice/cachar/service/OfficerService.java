@@ -39,11 +39,11 @@ public class OfficerService {
     }
 
     public Optional<Officer> findById(Long id) {
-        return officerRepository.findById(id);
+        return officerRepository.findById(String.valueOf(id));
     }
 
     public Officer getOfficerById(Long id) {
-        return officerRepository.findById(id)
+        return officerRepository.findById(String.valueOf(id))
                 .orElseThrow(() -> new OfficerNotFoundException("Officer not found with ID: " + id));
     }
 
@@ -69,7 +69,7 @@ public class OfficerService {
     }
 
     public Officer updateOfficer(Officer officer) {
-        Officer existingOfficer = getOfficerById(officer.getId());
+        Officer existingOfficer = getOfficerById(Long.valueOf(officer.getId()));
 
         existingOfficer.setName(officer.getName());
         existingOfficer.setEmail(officer.getEmail());

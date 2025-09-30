@@ -1,25 +1,26 @@
 package org.dcoffice.cachar.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 
-import javax.persistence.*;
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Entity
-@Table(name = "citizens")
+@Document(collection = "citizens")
 public class Citizen {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id; // MongoDB uses String for ID
 
     @NotBlank(message = "Mobile number is required")
     @Pattern(regexp = "^[6-9]\\d{9}$", message = "Invalid mobile number format")
-    @Column(unique = true, nullable = false)
+    @Indexed(unique = true)
     private String mobileNumber;
 
     @NotBlank(message = "Name is required")
@@ -33,7 +34,6 @@ public class Citizen {
     @Pattern(regexp = "^\\d{12}$", message = "Invalid Aadhar number")
     private String aadharNumber;
 
-    @Column(nullable = false)
     private boolean isVerified = false;
 
     @JsonIgnore
@@ -42,29 +42,19 @@ public class Citizen {
     @JsonIgnore
     private LocalDateTime otpExpiry;
 
-    @Column(nullable = false)
     private LocalDateTime createdAt;
-
-    @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "citizen", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonManagedReference
-    private List<Complaint> complaints;
+    // No @DBRef for complaints - we'll query separately
 
     public Citizen() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
-    @PreUpdate
-    public void preUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
-
     // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
     public String getMobileNumber() { return mobileNumber; }
     public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
@@ -95,7 +85,4 @@ public class Citizen {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-
-    public List<Complaint> getComplaints() { return complaints; }
-    public void setComplaints(List<Complaint> complaints) { this.complaints = complaints; }
 }
