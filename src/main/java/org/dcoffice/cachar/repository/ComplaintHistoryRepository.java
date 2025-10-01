@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface ComplaintHistoryRepository extends MongoRepository<ComplaintHistory, Long> {
-    List<ComplaintHistory> findByComplaintIdOrderByTimestampDesc(Long complaintId);
-    List<ComplaintHistory> findByOfficerIdOrderByTimestampDesc(Long officerId);
+public interface ComplaintHistoryRepository extends MongoRepository<ComplaintHistory, String> {
+    List<ComplaintHistory> findByComplaintIdOrderByTimestampDesc(String complaintId); // ✅
+    List<ComplaintHistory> findByOfficerIdOrderByTimestampDesc(String officerId);
 }

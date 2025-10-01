@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +60,7 @@ public class ComplaintController {
 
             // Create complaint object
             Complaint complaint = new Complaint();
-            complaint.setCitizenId(citizen.getId());
+            complaint.setCitizenId(citizen.getMobileNumber());
             complaint.setSubject(subject);
             complaint.setDescription(description);
             complaint.setCategory(category);
@@ -89,7 +91,7 @@ public class ComplaintController {
                 return ResponseEntity.notFound().build();
             }
 
-            List<Complaint> complaints = complaintService.getComplaintsByCitizen(Long.valueOf(citizenOpt.get().getId()));
+            List<Complaint> complaints = complaintService.getComplaintsByCitizen(citizenOpt.get().getMobileNumber());
             return ResponseEntity.ok(ApiResponse.success("Complaints retrieved successfully", complaints));
 
         } catch (Exception e) {
@@ -106,8 +108,9 @@ public class ComplaintController {
 
             if (complaintOpt.isPresent()) {
                 Complaint complaint = complaintOpt.get();
-                List<ComplaintHistory> history = complaintHistoryService.getComplaintHistory(Long.valueOf(complaint.getId()));
-                List<ComplaintDocument> documents = fileStorageService.getComplaintDocuments(Long.valueOf(complaint.getId()));
+
+                List<ComplaintHistory> history = complaintHistoryService.getComplaintHistory(complaintNumber);
+                List<ComplaintDocument> documents = fileStorageService.getComplaintDocuments(complaint.getComplaintNumber());
 
                 Map<String, Object> response = new HashMap<>();
                 response.put("complaint", complaint);
@@ -172,5 +175,12 @@ public class ComplaintController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Failed to fetch complaints by status: " + e.getMessage()));
         }
+    }
+
+    private String generateComplaintNumber() {
+        String prefix = "CCR"; // Cachar Complaint Registration
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        String randomSuffix = String.format("%04d", (int)(Math.random() * 10000));
+        return prefix + timestamp + randomSuffix;
     }
 }

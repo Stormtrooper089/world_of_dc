@@ -1,24 +1,22 @@
 package org.dcoffice.cachar.entity;
+
 import java.time.LocalDateTime;
 
 public class ComplaintHistory {
 
     private String id;
-    private String officerId;
-    private String officerName;
+    private Long complaintId;
+    private String complaintNumber;
+
+    private String officerId;         // Can be null for citizen actions
+    private String actorName;         // "Citizen" or officer name
     private String officerDesignation;
+
     private ComplaintStatus previousStatus;
     private ComplaintStatus newStatus;
     private String remarks;
     private LocalDateTime timestamp;
-    private Long complaintId;
-    public Long getComplaintId() {
-        return complaintId;
-    }
 
-    public void setComplaintId(Long complaintId) {
-        this.complaintId = complaintId;
-    }
     public ComplaintHistory() {
         this.timestamp = LocalDateTime.now();
     }
@@ -27,11 +25,17 @@ public class ComplaintHistory {
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
+    public Long getComplaintId() { return complaintId; }
+    public void setComplaintId(Long complaintId) { this.complaintId = complaintId; }
+
+    public String getComplaintNumber() { return complaintNumber; }
+    public void setComplaintNumber(String complaintNumber) { this.complaintNumber = complaintNumber; }
+
     public String getOfficerId() { return officerId; }
     public void setOfficerId(String officerId) { this.officerId = officerId; }
 
-    public String getOfficerName() { return officerName; }
-    public void setOfficerName(String officerName) { this.officerName = officerName; }
+    public String getActorName() { return actorName; }
+    public void setActorName(String actorName) { this.actorName = actorName; }
 
     public String getOfficerDesignation() { return officerDesignation; }
     public void setOfficerDesignation(String officerDesignation) { this.officerDesignation = officerDesignation; }

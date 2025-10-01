@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface ComplaintDocumentRepository extends MongoRepository<ComplaintDocument, Long> {
+public interface ComplaintDocumentRepository extends MongoRepository<ComplaintDocument, String> {
     List<ComplaintDocument> findByComplaintId(Long complaintId);
+    List<ComplaintDocument> findByComplaintNumber(String complaintNumber);
 }

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -21,24 +22,36 @@ public class ComplaintHistoryService {
                                                ComplaintStatus previousStatus, ComplaintStatus newStatus,
                                                String remarks) {
         ComplaintHistory history = new ComplaintHistory();
-        history.setId(complaint.getId());
-        history.setOfficerId(officer.getId());
+        history.setComplaintId(complaint.getComplaintId()); // use complaintId instead of Mongo _id
+        history.setComplaintNumber(complaint.getComplaintNumber());
         history.setPreviousStatus(previousStatus);
         history.setNewStatus(newStatus);
         history.setRemarks(remarks);
+        history.setTimestamp(LocalDateTime.now());
+
+        if (officer != null) {
+            history.setOfficerId(officer.getId());
+            history.setActorName(officer.getName());
+        } else {
+            history.setOfficerId(null);
+            history.setActorName("Citizen");
+        }
 
         ComplaintHistory saved = complaintHistoryRepository.save(history);
-        logger.debug("Created history entry for complaint: {} with status: {}",
-                complaint.getComplaintNumber(), newStatus);
+        logger.debug("Created history entry for complaint: {} with status: {} by {}",
+                complaint.getComplaintNumber(), newStatus, history.getActorName());
 
         return saved;
     }
 
-    public List<ComplaintHistory> getComplaintHistory(Long complaintId) {
-        return complaintHistoryRepository.findByComplaintIdOrderByTimestampDesc(complaintId);
+
+
+    public List<ComplaintHistory> getComplaintHistory(String complaintNumber) {
+        return complaintHistoryRepository.findByComplaintIdOrderByTimestampDesc(complaintNumber);
     }
 
-    public List<ComplaintHistory> getOfficerHistory(Long officerId) {
+    public List<ComplaintHistory> getOfficerHistory(String officerId) {
         return complaintHistoryRepository.findByOfficerIdOrderByTimestampDesc(officerId);
     }
+
 }

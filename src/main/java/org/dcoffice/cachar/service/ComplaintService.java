@@ -35,10 +35,13 @@ public class ComplaintService {
     @Autowired
     private OfficerService officerService;
 
+    @Autowired
+    private CounterService counterService;
+
     public Complaint createComplaint(Complaint complaint, List<MultipartFile> files) {
         // Generate complaint number
         complaint.setComplaintNumber(generateComplaintNumber());
-
+        complaint.setComplaintId(counterService.getNextSequence("complaintId"));
         // Save complaint first
         Complaint savedComplaint = complaintRepository.save(complaint);
         logger.info("Created complaint: {} for citizen: {}", savedComplaint.getComplaintNumber(),
@@ -56,8 +59,13 @@ public class ComplaintService {
         }
 
         // Create history entry
-        complaintHistoryService.createHistoryEntry(savedComplaint, null,
-                null, ComplaintStatus.SUBMITTED, "Complaint submitted by citizen");
+        complaintHistoryService.createHistoryEntry(
+                savedComplaint,
+                null, // actor is null because it's submitted by citizen
+                null, // no previous status
+                ComplaintStatus.SUBMITTED,
+                "Complaint submitted by citizen"
+        );
 
         return savedComplaint;
     }
@@ -67,7 +75,6 @@ public class ComplaintService {
         Officer officer = officerService.getOfficerById(officerId);
 
         ComplaintStatus previousStatus = complaint.getStatus();
-
         complaint.setAssignedToId(officer.getId());
         complaint.setAssignedById(assignedBy.getId());
         complaint.setAssignmentRemarks(remarks);
@@ -106,8 +113,8 @@ public class ComplaintService {
         return saved;
     }
 
-    public List<Complaint> getComplaintsByCitizen(Long citizenId) {
-        return complaintRepository.findByCitizenId(String.valueOf(citizenId));
+    public List<Complaint> getComplaintsByCitizen(String citizenMobile) {
+        return complaintRepository.findByCitizenId(citizenMobile);
     }
 
     public List<Complaint> getComplaintsByOfficer(Long officerId) {

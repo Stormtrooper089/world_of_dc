@@ -1,13 +1,18 @@
 package org.dcoffice.cachar.entity;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.time.LocalDateTime;
 
+@Document(collection = "complaint_documents")
 public class ComplaintDocument {
 
+    @Id
     private String id;
 
-
-
-    private Long complaintId;  // <-- Must exist if you want findByComplaintId
+    private Long complaintId;  // Used to link with Complaint entity
+    private String complaintNumber;
     private String fileName;
     private String originalFileName;
     private String fileType;
@@ -20,8 +25,21 @@ public class ComplaintDocument {
     }
 
     // Getters and Setters
+
+
+    public String getComplaintNumber() {
+        return complaintNumber;
+    }
+
+    public void setComplaintNumber(String complaintNumber) {
+        this.complaintNumber = complaintNumber;
+    }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+
+    public Long getComplaintId() { return complaintId; }
+    public void setComplaintId(Long complaintId) { this.complaintId = complaintId; }
 
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
@@ -37,13 +55,7 @@ public class ComplaintDocument {
 
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
-    public Long getComplaintId() {
-        return complaintId;
-    }
 
-    public void setComplaintId(Long complaintId) {
-        this.complaintId = complaintId;
-    }
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }
 }
