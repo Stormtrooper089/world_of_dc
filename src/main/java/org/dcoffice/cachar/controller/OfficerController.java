@@ -2,6 +2,8 @@ package org.dcoffice.cachar.controller;
 
 import org.dcoffice.cachar.dto.ApiResponse;
 import org.dcoffice.cachar.dto.AssignComplaintRequest;
+import org.dcoffice.cachar.dto.OfficerLoginRequest;
+import org.dcoffice.cachar.dto.OfficerApproveRequest;
 import org.dcoffice.cachar.entity.*;
 import org.dcoffice.cachar.service.ComplaintService;
 import org.dcoffice.cachar.service.OfficerService;
@@ -29,6 +31,9 @@ public class OfficerController {
 
     @Autowired
     private OfficerService officerService;
+
+    @Autowired
+    private org.dcoffice.cachar.service.JwtService jwtService;
 
     @PostMapping("/assign-complaint")
     @PreAuthorize("hasRole('DISTRICT_COMMISSIONER') or hasRole('ADDITIONAL_DISTRICT_COMMISSIONER')")
@@ -137,6 +142,44 @@ public class OfficerController {
         }
     }
 
+    @PostMapping("/signup")
+    public ResponseEntity<ApiResponse<String>> signupOfficer(@Valid @RequestBody Officer officer) {
+        try {
+            Officer saved = officerService.signupOfficer(officer);
+            return ResponseEntity.ok(ApiResponse.success("Officer signup initiated. Await admin approval.", saved.getId()));
+        } catch (Exception e) {
+            logger.error("Officer signup failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Signup failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<?>> officerLogin(@Valid @RequestBody org.dcoffice.cachar.dto.OfficerLoginRequest request) {
+        try {
+            Officer officer = officerService.authenticateOfficer(request.getEmployeeId(), request.getPassword());
+            String token = jwtService.generateTokenForOfficer(officer);
+            java.util.Map<String, String> data = new java.util.HashMap<>();
+            data.put("token", token);
+            data.put("officerId", officer.getId());
+            return ResponseEntity.ok(ApiResponse.success("Login successful", data));
+        } catch (Exception e) {
+            logger.warn("Officer login failed for {}: {}", request.getEmployeeId(), e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Login failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/approve/{officerId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DISTRICT_COMMISSIONER')")
+    public ResponseEntity<ApiResponse<Officer>> approveOfficer(@PathVariable Long officerId, @RequestBody OfficerApproveRequest request) {
+        try {
+            Officer updated = officerService.approveOfficer(officerId, request.getApproverEmployeeId(), request.getRole());
+            return ResponseEntity.ok(ApiResponse.success("Officer approved successfully", updated));
+        } catch (Exception e) {
+            logger.error("Failed to approve officer {}: {}", officerId, e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Approval failed: " + e.getMessage()));
+        }
+    }
+
     @GetMapping("/role/{role}")
     public ResponseEntity<ApiResponse<List<Officer>>> getOfficersByRole(@PathVariable OfficerRole role) {
         try {
@@ -146,6 +189,30 @@ public class OfficerController {
             logger.error("Failed to fetch officers by role {}: {}", role, e.getMessage());
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Failed to fetch officers by role: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/pending")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DISTRICT_COMMISSIONER')")
+    public ResponseEntity<ApiResponse<List<Officer>>> getPendingApprovals() {
+        try {
+            List<Officer> pending = officerService.findPendingApprovals();
+            return ResponseEntity.ok(ApiResponse.success("Pending approvals retrieved", pending));
+        } catch (Exception e) {
+            logger.error("Failed to fetch pending approvals: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Failed to fetch pending approvals: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/reject/{officerId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('DISTRICT_COMMISSIONER')")
+    public ResponseEntity<ApiResponse<Void>> rejectOfficer(@PathVariable Long officerId, @RequestBody OfficerApproveRequest request) {
+        try {
+            officerService.rejectOfficer(officerId, request.getApproverEmployeeId());
+            return ResponseEntity.ok(ApiResponse.success("Officer rejected"));
+        } catch (Exception e) {
+            logger.error("Failed to reject officer {}: {}", officerId, e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Rejection failed: " + e.getMessage()));
         }
     }
 }

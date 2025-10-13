@@ -38,6 +38,43 @@ public class OfficerService {
         return savedOfficer;
     }
 
+    /**
+     * Signup a new officer. Officer will be created with isApproved=false and must be approved by an admin.
+     */
+    public Officer signupOfficer(Officer officer) {
+        officer.setApproved(false);
+        officer.setActive(true);
+        return createOfficer(officer);
+    }
+
+    /**
+     * Approve an officer (admin action)
+     */
+    public Officer approveOfficer(Long officerId, String approverEmployeeId, org.dcoffice.cachar.entity.OfficerRole assignedRole) {
+        Officer officer = getOfficerById(officerId);
+        officer.setApproved(true);
+        if (assignedRole != null) officer.setRole(assignedRole);
+        Officer saved = officerRepository.save(officer);
+        logger.info("Officer {} approved by {}", officer.getEmployeeId(), approverEmployeeId);
+        return saved;
+    }
+
+    /**
+     * Authenticate officer and ensure they are approved before allowing login
+     */
+    public Officer authenticateOfficer(String employeeId, String rawPassword) {
+        Officer officer = getOfficerByEmployeeId(employeeId);
+        if (!officer.isApproved()) {
+            throw new IllegalStateException("Officer not approved by admin");
+        }
+
+        if (!passwordEncoder.matches(rawPassword, officer.getPassword())) {
+            throw new IllegalArgumentException("Invalid credentials");
+        }
+
+        return officer;
+    }
+
     public Optional<Officer> findById(Long id) {
         return officerRepository.findById(String.valueOf(id));
     }
@@ -58,6 +95,17 @@ public class OfficerService {
 
     public List<Officer> findActiveOfficers() {
         return officerRepository.findByIsActiveTrue();
+    }
+
+    public List<Officer> findPendingApprovals() {
+        return officerRepository.findByIsApprovedFalseAndIsActiveTrue();
+    }
+
+    public void rejectOfficer(Long officerId, String approverEmployeeId) {
+        Officer officer = getOfficerById(officerId);
+        officer.setActive(false);
+        officerRepository.save(officer);
+        logger.info("Officer {} rejected by {}", officer.getEmployeeId(), approverEmployeeId);
     }
 
     public List<Officer> findOfficersByRole(OfficerRole role) {
