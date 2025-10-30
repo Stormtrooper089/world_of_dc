@@ -26,12 +26,12 @@ public class ComplaintUpdateRequest {
     private Department assignedDepartment;
     private String departmentRemarks;
     private String progressNotes;
+    private String assignmentRemarks;
 
     @Min(value = 0, message = "Progress percentage must be between 0 and 100")
     @Max(value = 100, message = "Progress percentage must be between 0 and 100")
     private Integer progressPercentage;
 
-    @NotBlank(message = "Update remarks are required")
     private String updateRemarks;
 
     // Getters and Setters
@@ -64,6 +64,9 @@ public class ComplaintUpdateRequest {
 
     public Integer getProgressPercentage() { return progressPercentage; }
     public void setProgressPercentage(Integer progressPercentage) { this.progressPercentage = progressPercentage; }
+
+    public String getAssignmentRemarks() { return assignmentRemarks; }
+    public void setAssignmentRemarks(String assignmentRemarks) { this.assignmentRemarks = assignmentRemarks; }
 
     public String getUpdateRemarks() { return updateRemarks; }
     public void setUpdateRemarks(String updateRemarks) { this.updateRemarks = updateRemarks; }

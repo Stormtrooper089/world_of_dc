@@ -158,7 +158,7 @@ public class ComplaintService {
     }
 
     public Complaint getComplaintById(Long id) {
-        return complaintRepository.findById(String.valueOf(id))
+        return complaintRepository.findByComplaintId(id)
                 .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with ID: " + id));
     }
 
@@ -218,6 +218,9 @@ public class ComplaintService {
         if (request.getDepartmentRemarks() != null) {
             complaint.setDepartmentRemarks(request.getDepartmentRemarks());
         }
+        if (request.getAssignmentRemarks() != null) {
+            complaint.setAssignmentRemarks(request.getAssignmentRemarks());
+        }
         if (request.getProgressNotes() != null) {
             complaint.setProgressNotes(request.getProgressNotes());
         }
@@ -226,7 +229,11 @@ public class ComplaintService {
         }
         
         // Add to history
-        addToHistory(complaint, "Complaint updated", request.getUpdateRemarks(), currentOfficerId);
+        String historyMessage = "Complaint updated";
+        if (request.getAssignedDepartment() != null) {
+            historyMessage += " and assigned to " + request.getAssignedDepartment().getDisplayName();
+        }
+        addToHistory(complaint, historyMessage, request.getUpdateRemarks(), currentOfficerId);
         
         return complaintRepository.save(complaint);
     }
