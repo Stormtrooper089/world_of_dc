@@ -51,9 +51,9 @@ public class ComplaintController {
             @RequestParam("mobileNumber") String mobileNumber,
             @RequestParam("subject") String subject,
             @RequestParam("description") String description,
-            @RequestParam("category") ComplaintCategory category,
-            @RequestParam(value = "priority", defaultValue = "MEDIUM") Priority priority,
+            @RequestParam(value = "priority", defaultValue = "MEDIUM") String priorityStr,
             @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "department", required = false) String departmentStr,
             @RequestParam(value = "files", required = false) List<MultipartFile> files,
             Authentication authentication) {
 
@@ -77,9 +77,29 @@ public class ComplaintController {
             complaint.setCitizenId(citizen.getMobileNumber());
             complaint.setSubject(subject);
             complaint.setDescription(description);
-            complaint.setCategory(category);
+            
+            // Convert priority string to enum
+            Priority priority = Priority.MEDIUM; // Default
+            if (priorityStr != null && !priorityStr.trim().isEmpty()) {
+                try {
+                    priority = Priority.valueOf(priorityStr);
+                } catch (IllegalArgumentException e) {
+                    logger.warn("Invalid priority value: {}, using default MEDIUM", priorityStr);
+                }
+            }
             complaint.setPriority(priority);
             complaint.setLocation(location);
+            
+            // Convert department string to enum
+            if (departmentStr != null && !departmentStr.trim().isEmpty()) {
+                try {
+                    Department department = Department.valueOf(departmentStr);
+                    complaint.setAssignedDepartment(department);
+                } catch (IllegalArgumentException e) {
+                    logger.warn("Invalid department value: {}, ignoring", departmentStr);
+                    // Continue without department assignment
+                }
+            }
             
             // Set the officer who created the complaint
             if (authentication != null) {
@@ -96,7 +116,7 @@ public class ComplaintController {
             return ResponseEntity.ok(ApiResponse.success("Complaint created successfully", response));
 
         } catch (Exception e) {
-            logger.error("Failed to create complaint for {}: {}", mobileNumber, e.getMessage());
+            logger.error("Failed to create complaint for {}: {}", mobileNumber, e.getMessage(), e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Failed to create complaint: " + e.getMessage()));
         }
@@ -177,7 +197,6 @@ public class ComplaintController {
             @RequestParam(value = "officerId", required = false) String officerId,
             @RequestParam(value = "citizenId", required = false) String citizenId,
             @RequestParam(value = "status", required = false) ComplaintStatus status,
-            @RequestParam(value = "category", required = false) ComplaintCategory category,
             @RequestParam(value = "createdBy", required = false) String createdBy,
             Authentication authentication) {
         try {
@@ -197,8 +216,6 @@ public class ComplaintController {
                     complaints = complaintService.getComplaintsByCitizen(citizenId);
                 } else if (status != null) {
                     complaints = complaintService.getComplaintsByStatus(status);
-                } else if (category != null) {
-                    complaints = complaintService.getComplaintsByCategory(category);
                 } else {
                     complaints = complaintService.getAllComplaints();
                 }

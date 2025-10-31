@@ -97,6 +97,16 @@ public class OfficerService {
         return officerRepository.findByIsActiveTrue();
     }
 
+    /**
+     * Search active officers by name (case-insensitive partial match)
+     */
+    public List<Officer> searchOfficersByName(String nameQuery) {
+        if (nameQuery == null || nameQuery.trim().isEmpty()) {
+            return officerRepository.findByIsActiveTrue();
+        }
+        return officerRepository.findActiveOfficersByNameContaining(nameQuery.trim());
+    }
+
     public List<Officer> findPendingApprovals() {
         return officerRepository.findByIsApprovedFalseAndIsActiveTrue();
     }

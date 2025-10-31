@@ -32,10 +32,6 @@ public class Complaint {
     @NotBlank(message = "Description is required")
     private String description;
 
-    @NotNull(message = "Category is required")
-    @Indexed
-    private ComplaintCategory category;
-
     private Priority priority = Priority.MEDIUM;
 
     @Indexed
@@ -90,9 +86,6 @@ public class Complaint {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
-
-    public ComplaintCategory getCategory() { return category; }
-    public void setCategory(ComplaintCategory category) { this.category = category; }
 
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }

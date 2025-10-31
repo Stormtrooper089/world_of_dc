@@ -27,6 +27,7 @@ public class ComplaintUpdateRequest {
     private String departmentRemarks;
     private String progressNotes;
     private String assignmentRemarks;
+    private String assignedToId; // Officer ID to assign/reassign the complaint to
 
     @Min(value = 0, message = "Progress percentage must be between 0 and 100")
     @Max(value = 100, message = "Progress percentage must be between 0 and 100")
@@ -67,6 +68,9 @@ public class ComplaintUpdateRequest {
 
     public String getAssignmentRemarks() { return assignmentRemarks; }
     public void setAssignmentRemarks(String assignmentRemarks) { this.assignmentRemarks = assignmentRemarks; }
+
+    public String getAssignedToId() { return assignedToId; }
+    public void setAssignedToId(String assignedToId) { this.assignedToId = assignedToId; }
 
     public String getUpdateRemarks() { return updateRemarks; }
     public void setUpdateRemarks(String updateRemarks) { this.updateRemarks = updateRemarks; }

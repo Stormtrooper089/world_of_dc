@@ -45,6 +45,13 @@ public class ComplaintService {
         // Generate complaint number
         complaint.setComplaintNumber(generateComplaintNumber());
         complaint.setComplaintId(counterService.getNextSequence("complaintId"));
+        
+        // Assign the creator as the assigned officer if createdById is set
+        if (complaint.getCreatedById() != null && !complaint.getCreatedById().isEmpty()) {
+            complaint.setAssignedToId(complaint.getCreatedById());
+            complaint.setAssignedAt(LocalDateTime.now());
+        }
+        
         // Save complaint first
         Complaint savedComplaint = complaintRepository.save(complaint);
         logger.info("Created complaint: {} for citizen: {}", savedComplaint.getComplaintNumber(),
@@ -140,10 +147,6 @@ public class ComplaintService {
         return complaintRepository.findByStatus(status);
     }
 
-    public List<Complaint> getComplaintsByCategory(ComplaintCategory category) {
-        return complaintRepository.findByCategory(category);
-    }
-
     public List<Complaint> getRecentComplaints(int days) {
         LocalDateTime fromDate = LocalDateTime.now().minusDays(days);
         return complaintRepository.findRecentComplaints(fromDate);
@@ -227,11 +230,32 @@ public class ComplaintService {
         if (request.getProgressPercentage() != null) {
             complaint.setProgressPercentage(request.getProgressPercentage());
         }
+        if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
+            // Verify officer exists and is approved
+            Officer officer = officerService.getOfficerById(request.getAssignedToId());
+            if (officer == null || !officer.isApproved()) {
+                throw new IllegalArgumentException("Invalid or unapproved officer ID: " + request.getAssignedToId());
+            }
+            String previousOfficerId = complaint.getAssignedToId();
+            complaint.setAssignedToId(request.getAssignedToId());
+            complaint.setAssignedById(currentOfficerId);
+            complaint.setAssignedAt(LocalDateTime.now());
+            if (request.getAssignmentRemarks() != null && !request.getAssignmentRemarks().trim().isEmpty()) {
+                complaint.setAssignmentRemarks(request.getAssignmentRemarks());
+            }
+            logger.info("Complaint {} reassigned from {} to {}", 
+                complaint.getComplaintNumber(), 
+                previousOfficerId != null ? previousOfficerId : "unassigned", 
+                request.getAssignedToId());
+        }
         
         // Add to history
         String historyMessage = "Complaint updated";
         if (request.getAssignedDepartment() != null) {
             historyMessage += " and assigned to " + request.getAssignedDepartment().getDisplayName();
+        }
+        if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
+            historyMessage += " and officer reassigned";
         }
         addToHistory(complaint, historyMessage, request.getUpdateRemarks(), currentOfficerId);
         

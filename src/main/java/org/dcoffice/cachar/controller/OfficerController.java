@@ -139,9 +139,15 @@ public class OfficerController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<ApiResponse<List<Officer>>> getAllActiveOfficers() {
+    public ResponseEntity<ApiResponse<List<Officer>>> getAllActiveOfficers(
+            @RequestParam(value = "search", required = false) String searchQuery) {
         try {
-            List<Officer> officers = officerService.findActiveOfficers();
+            List<Officer> officers;
+            if (searchQuery != null && !searchQuery.trim().isEmpty()) {
+                officers = officerService.searchOfficersByName(searchQuery);
+            } else {
+                officers = officerService.findActiveOfficers();
+            }
             return ResponseEntity.ok(ApiResponse.success("Active officers retrieved", officers));
         } catch (Exception e) {
             logger.error("Failed to fetch active officers: {}", e.getMessage());

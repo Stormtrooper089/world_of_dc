@@ -1,7 +1,6 @@
 package org.dcoffice.cachar.repository;
 
 import org.dcoffice.cachar.entity.Complaint;
-import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.ComplaintStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
@@ -26,8 +25,6 @@ public interface ComplaintRepository extends MongoRepository<Complaint, String> 
 
     List<Complaint> findByStatus(ComplaintStatus status);
 
-    List<Complaint> findByCategory(ComplaintCategory category);
-
     @Query("{ 'assignedToId': null, 'status': 'CREATED' }")
     List<Complaint> findUnassignedComplaints();
 
@@ -45,9 +42,6 @@ public interface ComplaintRepository extends MongoRepository<Complaint, String> 
 
     @Query("{ 'priority': ?0, 'status': { $nin: ['CLOSED', 'RESOLVED'] } }")
     List<Complaint> findOpenComplaintsByPriority(String priority);
-
-    @Query("{ 'category': ?0, 'createdAt': { $gte: ?1 } }")
-    List<Complaint> findByCategoryAndCreatedAtAfter(ComplaintCategory category, LocalDateTime date);
 
     // For pagination and sorting
     List<Complaint> findByStatusOrderByCreatedAtDesc(ComplaintStatus status);
