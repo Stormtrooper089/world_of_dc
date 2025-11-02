@@ -159,6 +159,32 @@ public class FileStorageService {
         return UUID.randomUUID().toString() + "." + extension;
     }
 
+    public String storeFile(MultipartFile file, String subDirectory) throws IOException {
+        validateFile(file);
+
+        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+        String fileName = generateUniqueFileName(originalFileName);
+
+        try {
+            if (originalFileName.contains("..")) {
+                throw new FileStorageException("Invalid file name: " + originalFileName);
+            }
+
+            // Create subdirectory if it doesn't exist
+            Path subDir = this.fileStorageLocation.resolve(subDirectory);
+            if (!Files.exists(subDir)) {
+                Files.createDirectories(subDir);
+            }
+
+            Path targetLocation = subDir.resolve(fileName);
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+            return subDirectory + "/" + fileName;
+        } catch (IOException ex) {
+            throw new FileStorageException("Could not store file " + originalFileName + ". Please try again!", ex);
+        }
+    }
+
     private String getFileExtension(String fileName) {
         if (fileName == null || fileName.isEmpty()) {
             return "";

@@ -47,18 +47,27 @@ public class FileController {
         }
     }
 
-    @GetMapping("/download/{fileName}")
-    public ResponseEntity<ByteArrayResource> downloadFile(@PathVariable String fileName) {
+    @GetMapping("/download/{*filePath}")
+    public ResponseEntity<ByteArrayResource> downloadFile(@PathVariable String filePath) {
         try {
-            byte[] data = fileStorageService.loadFile(fileName);
+            // Remove leading slash if present
+            if (filePath.startsWith("/")) {
+                filePath = filePath.substring(1);
+            }
+            logger.info("Attempting to download file: {}", filePath);
+            byte[] data = fileStorageService.loadFile(filePath);
+            logger.info("Successfully loaded file: {} ({} bytes)", filePath, data.length);
             ByteArrayResource resource = new ByteArrayResource(data);
+
+            // Extract filename from path for the Content-Disposition header
+            String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
 
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                     .body(resource);
         } catch (Exception e) {
-            logger.error("Failed to download file {}: {}", fileName, e.getMessage());
+            logger.error("Failed to download file {}: {}", filePath, e.getMessage(), e);
             return ResponseEntity.notFound().build();
         }
     }

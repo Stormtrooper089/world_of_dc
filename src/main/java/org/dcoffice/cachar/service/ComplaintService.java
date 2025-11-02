@@ -4,10 +4,11 @@ package org.dcoffice.cachar.service;
 
 import org.dcoffice.cachar.dto.ComplaintUpdateRequest;
 import org.dcoffice.cachar.dto.ComplaintDepartmentAssignmentRequest;
-import org.dcoffice.cachar.dto.ComplaintProgressUpdateRequest;
 import org.dcoffice.cachar.entity.*;
 import org.dcoffice.cachar.exception.ComplaintNotFoundException;
 import org.dcoffice.cachar.repository.ComplaintRepository;
+import org.dcoffice.cachar.repository.CommentRepository;
+import org.dcoffice.cachar.repository.ComplaintDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,12 @@ public class ComplaintService {
 
     @Autowired
     private CounterService counterService;
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private ComplaintDocumentRepository complaintDocumentRepository;
 
     public Complaint createComplaint(Complaint complaint, List<MultipartFile> files) {
         // Generate complaint number
@@ -165,6 +172,29 @@ public class ComplaintService {
                 .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with ID: " + id));
     }
 
+    public Complaint getComplaintByIdString(String id) {
+        try {
+            return complaintRepository.findById(id)
+                    .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with ID: " + id));
+        } catch (Exception e) {
+            logger.error("Error finding complaint by ID string: {}", id, e);
+            return null;
+        }
+    }
+
+    public Complaint getComplaintWithComments(Long id) {
+        Complaint complaint = getComplaintById(id);
+        List<Comment> comments = commentRepository.findByComplaintIdOrderByCreatedAtAsc(complaint.getId());
+        complaint.setComments(comments);
+
+        // Load documents for the complaint
+        List<ComplaintDocument> documents = complaintDocumentRepository.findByComplaintId(complaint.getId());
+        complaint.setDocuments(documents);
+
+        return complaint;
+    }
+
+
     public Complaint getComplaintByNumber(String complaintNumber) {
         return complaintRepository.findByComplaintNumber(complaintNumber)
                 .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with number: " + complaintNumber));
@@ -221,15 +251,6 @@ public class ComplaintService {
         if (request.getDepartmentRemarks() != null) {
             complaint.setDepartmentRemarks(request.getDepartmentRemarks());
         }
-        if (request.getAssignmentRemarks() != null) {
-            complaint.setAssignmentRemarks(request.getAssignmentRemarks());
-        }
-        if (request.getProgressNotes() != null) {
-            complaint.setProgressNotes(request.getProgressNotes());
-        }
-        if (request.getProgressPercentage() != null) {
-            complaint.setProgressPercentage(request.getProgressPercentage());
-        }
         if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
             // Verify officer exists and is approved
             Officer officer = officerService.getOfficerById(request.getAssignedToId());
@@ -240,9 +261,6 @@ public class ComplaintService {
             complaint.setAssignedToId(request.getAssignedToId());
             complaint.setAssignedById(currentOfficerId);
             complaint.setAssignedAt(LocalDateTime.now());
-            if (request.getAssignmentRemarks() != null && !request.getAssignmentRemarks().trim().isEmpty()) {
-                complaint.setAssignmentRemarks(request.getAssignmentRemarks());
-            }
             logger.info("Complaint {} reassigned from {} to {}", 
                 complaint.getComplaintNumber(), 
                 previousOfficerId != null ? previousOfficerId : "unassigned", 
@@ -257,7 +275,7 @@ public class ComplaintService {
         if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
             historyMessage += " and officer reassigned";
         }
-        addToHistory(complaint, historyMessage, request.getUpdateRemarks(), currentOfficerId);
+        addToHistory(complaint, historyMessage, null, currentOfficerId);
         
         return complaintRepository.save(complaint);
     }
@@ -281,27 +299,6 @@ public class ComplaintService {
         return complaintRepository.save(complaint);
     }
     
-    /**
-     * Update complaint progress - only DC or complaint creator can update
-     */
-    public Complaint updateComplaintProgress(ComplaintProgressUpdateRequest request, String currentOfficerId, String currentRole) {
-        Complaint complaint = getComplaintById(request.getComplaintId());
-        
-        // Check authorization - only DC or complaint creator can update
-        if (!"ROLE_DISTRICT_COMMISSIONER".equals(currentRole) && 
-            !complaint.getCreatedById().equals(currentOfficerId)) {
-            throw new SecurityException("Access denied: Only District Commissioner or complaint creator can update progress");
-        }
-        
-        complaint.setProgressPercentage(request.getProgressPercentage());
-        complaint.setProgressNotes(request.getProgressNotes());
-        
-        // Add to history
-        addToHistory(complaint, "Progress updated to " + request.getProgressPercentage() + "%", 
-                    request.getUpdateRemarks(), currentOfficerId);
-        
-        return complaintRepository.save(complaint);
-    }
     
     /**
      * Add entry to complaint history

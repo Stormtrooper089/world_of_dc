@@ -52,10 +52,8 @@ public class Complaint {
     private String assignmentRemarks;
     private LocalDateTime assignedAt;
 
-    // Progress tracking
-    private String progressNotes;
-    private Integer progressPercentage = 0; // 0-100
-    private LocalDateTime lastProgressUpdate;
+    // Comments - embedded for better performance (will be populated from comments collection)
+    private List<Comment> comments;
 
     @Indexed
     private LocalDateTime createdAt;
@@ -153,21 +151,7 @@ public class Complaint {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // Progress getters and setters
-    public String getProgressNotes() { return progressNotes; }
-    public void setProgressNotes(String progressNotes) { 
-        this.progressNotes = progressNotes; 
-        this.lastProgressUpdate = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public Integer getProgressPercentage() { return progressPercentage; }
-    public void setProgressPercentage(Integer progressPercentage) { 
-        this.progressPercentage = Math.max(0, Math.min(100, progressPercentage)); // Ensure 0-100 range
-        this.lastProgressUpdate = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public LocalDateTime getLastProgressUpdate() { return lastProgressUpdate; }
-    public void setLastProgressUpdate(LocalDateTime lastProgressUpdate) { this.lastProgressUpdate = lastProgressUpdate; }
+    // Comments getters and setters
+    public List<Comment> getComments() { return comments; }
+    public void setComments(List<Comment> comments) { this.comments = comments; }
 }
