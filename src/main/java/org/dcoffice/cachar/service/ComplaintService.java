@@ -213,15 +213,19 @@ public class ComplaintService {
     }
 
     /**
-     * Update complaint details - only DC or complaint creator can update
+     * Update complaint details - complaint creator or admin roles can update
      */
     public Complaint updateComplaint(ComplaintUpdateRequest request, String currentOfficerId, String currentRole) {
         Complaint complaint = getComplaintById(request.getComplaintId());
         
-        // Check authorization - only DC or complaint creator can update
-        if (!"ROLE_DISTRICT_COMMISSIONER".equals(currentRole) && 
-            !complaint.getCreatedById().equals(currentOfficerId)) {
-            throw new SecurityException("Access denied: Only District Commissioner or complaint creator can update complaints");
+        // Check authorization - complaint creator or admin roles can update
+        boolean isAdminRole = "ROLE_DISTRICT_COMMISSIONER".equals(currentRole) ||
+                              "ROLE_ADDITIONAL_DISTRICT_COMMISSIONER".equals(currentRole);
+        boolean isComplaintCreator = complaint.getCreatedById().equals(currentOfficerId);
+        boolean isComplaintAssignee = complaint.getAssignedToId().equals(currentOfficerId);
+
+        if (!isAdminRole && !isComplaintCreator && !isComplaintAssignee) {
+            throw new SecurityException("Access denied: Only complaint creator, assignee or admin roles can update complaints");
         }
         
         // Update fields if provided
