@@ -10,6 +10,7 @@ import org.dcoffice.cachar.service.CitizenService;
 import org.dcoffice.cachar.service.ComplaintHistoryService;
 import org.dcoffice.cachar.service.ComplaintService;
 import org.dcoffice.cachar.service.FileStorageService;
+import org.dcoffice.cachar.service.OfficerService;
 import org.dcoffice.cachar.repository.CommentRepository;
 import org.dcoffice.cachar.repository.CommentAttachmentRepository;
 import org.dcoffice.cachar.repository.ComplaintDocumentRepository;
@@ -21,11 +22,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.springframework.security.core.Authentication;
 
 import javax.validation.Valid;
-import java.util.ArrayList;
-import java.util.List;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -51,6 +54,9 @@ public class ComplaintController {
 
     @Autowired
     private FileStorageService fileStorageService;
+
+    @Autowired
+    private OfficerService officerService;
 
     @Autowired
     private CommentRepository commentRepository;
@@ -195,11 +201,33 @@ public class ComplaintController {
                 // If it's not a number, treat it as MongoDB ObjectId
                 complaint = complaintService.getComplaintByIdString(id);
                 if (complaint != null) {
-                    // Load comments for this complaint and populate attachments
+                    // Load comments for this complaint and populate attachments and commenterName
                     List<Comment> comments = commentRepository.findByComplaintIdOrderByCreatedAtAsc(complaint.getId());
                     for (Comment comment : comments) {
                         List<CommentAttachment> attachments = commentAttachmentRepository.findByCommentId(comment.getId());
                         comment.setAttachments(attachments);
+
+                        // Populate commenterName if not set
+                        if (comment.getCommenterName() == null || comment.getCommenterName().trim().isEmpty()) {
+                            try {
+                                if ("OFFICER".equals(comment.getCommenterRole()) ||
+                                    "DISTRICT_COMMISSIONER".equals(comment.getCommenterRole())) {
+                                    Officer officer = officerService.getOfficerById(comment.getCommenterId());
+                                    if (officer != null) {
+                                        comment.setCommenterName(officer.getName());
+                                        commentRepository.save(comment);
+                                    }
+                                } else if ("CITIZEN".equals(comment.getCommenterRole())) {
+                                    Citizen citizen = citizenService.getCitizenByMobileNumber(comment.getCommenterId());
+                                    if (citizen != null) {
+                                        comment.setCommenterName(citizen.getName());
+                                        commentRepository.save(comment);
+                                    }
+                                }
+                            } catch (Exception commentException) {
+                                logger.warn("Failed to populate commenterName for comment {}: {}", comment.getId(), commentException.getMessage());
+                            }
+                        }
                     }
                     complaint.setComments(comments);
 
@@ -273,16 +301,35 @@ public class ComplaintController {
                     complaints = complaintService.getAllComplaints();
                 }
             } else {
-                // Regular officers can only see complaints they created
+                // Regular officers can see complaints they created OR are assigned to them
                 if (createdBy != null && createdBy.equals(currentOfficerId)) {
                     complaints = complaintService.getComplaintsCreatedByOfficer(createdBy);
                 } else if (createdBy == null) {
-                    // If no createdBy specified, default to current officer's created complaints
-                    complaints = complaintService.getComplaintsCreatedByOfficer(currentOfficerId);
+                    // If no createdBy specified, show complaints created by OR assigned to current officer
+                    List<Complaint> createdComplaints = complaintService.getComplaintsCreatedByOfficer(currentOfficerId);
+                    List<Complaint> assignedComplaints = complaintService.getComplaintsByOfficer(currentOfficerId);
+
+                    // Combine and deduplicate complaints
+                    Set<String> complaintIds = new HashSet<>();
+                    complaints = new ArrayList<>();
+
+                    // Add created complaints first
+                    for (Complaint c : createdComplaints) {
+                        if (complaintIds.add(c.getId())) {
+                            complaints.add(c);
+                        }
+                    }
+
+                    // Add assigned complaints (avoiding duplicates)
+                    for (Complaint c : assignedComplaints) {
+                        if (complaintIds.add(c.getId())) {
+                            complaints.add(c);
+                        }
+                    }
                 } else {
                     // Officer trying to access other officer's complaints - not allowed
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body(ApiResponse.error("Access denied: You can only view complaints you created"));
+                            .body(ApiResponse.error("Access denied: You can only view complaints you created or are assigned to"));
                 }
             }
             
@@ -368,11 +415,27 @@ public class ComplaintController {
 
             // Set commenter name and role based on user type
             if ("ROLE_OFFICER".equals(currentUserRole) || "ROLE_DISTRICT_COMMISSIONER".equals(currentUserRole)) {
-                // For officers, we need to get their name from officer service
+                // For officers, get their name from officer service
                 comment.setCommenterRole(currentUserRole.replace("ROLE_", ""));
+                try {
+                    Officer officer = officerService.getOfficerById(currentUserId);
+                    if (officer != null) {
+                        comment.setCommenterName(officer.getName());
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to get officer name for commenter {}: {}", currentUserId, e.getMessage());
+                }
             } else {
-                // For citizens
+                // For citizens, get their name from citizen service
                 comment.setCommenterRole("CITIZEN");
+                try {
+                    Citizen citizen = citizenService.getCitizenByMobileNumber(currentUserId);
+                    if (citizen != null) {
+                        comment.setCommenterName(citizen.getName());
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to get citizen name for commenter {}: {}", currentUserId, e.getMessage());
+                }
             }
 
             // Handle file attachments if provided
@@ -437,10 +500,34 @@ public class ComplaintController {
         try {
             List<Comment> comments = commentRepository.findByComplaintIdOrderByCreatedAtAsc(complaintId);
 
-            // Populate attachments for each comment
+            // Populate attachments and commenterName for each comment
             for (Comment comment : comments) {
                 List<CommentAttachment> attachments = commentAttachmentRepository.findByCommentId(comment.getId());
                 comment.setAttachments(attachments);
+
+                // Populate commenterName if not set
+                if (comment.getCommenterName() == null || comment.getCommenterName().trim().isEmpty()) {
+                    try {
+                        if ("OFFICER".equals(comment.getCommenterRole()) ||
+                            "DISTRICT_COMMISSIONER".equals(comment.getCommenterRole())) {
+                            Officer officer = officerService.getOfficerById(comment.getCommenterId());
+                            if (officer != null) {
+                                comment.setCommenterName(officer.getName());
+                                // Optionally save the updated comment
+                                commentRepository.save(comment);
+                            }
+                        } else if ("CITIZEN".equals(comment.getCommenterRole())) {
+                            Citizen citizen = citizenService.getCitizenByMobileNumber(comment.getCommenterId());
+                            if (citizen != null) {
+                                comment.setCommenterName(citizen.getName());
+                                // Optionally save the updated comment
+                                commentRepository.save(comment);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to populate commenterName for comment {}: {}", comment.getId(), e.getMessage());
+                    }
+                }
             }
 
             return ResponseEntity.ok(ApiResponse.success("Comments retrieved successfully", comments));
