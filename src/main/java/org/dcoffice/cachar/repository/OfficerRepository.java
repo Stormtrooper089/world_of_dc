@@ -19,6 +19,9 @@ public interface OfficerRepository extends MongoRepository<Officer, String> {
 
     List<Officer> findByIsActiveTrue();
 
+    List<Officer> findByIsApprovedFalseAndIsActiveTrue();
+    List<Officer> findByIsApprovedTrueAndIsActiveTrue();
+
     boolean existsByEmployeeId(String employeeId);
 
     @Query("{ 'department': ?0, 'isActive': true }")

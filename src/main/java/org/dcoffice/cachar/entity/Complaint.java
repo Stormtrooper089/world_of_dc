@@ -32,24 +32,30 @@ public class Complaint {
     @NotBlank(message = "Description is required")
     private String description;
 
-    @NotNull(message = "Category is required")
-    @Indexed
-    private ComplaintCategory category;
-
     private Priority priority = Priority.MEDIUM;
 
     @Indexed
-    private ComplaintStatus status = ComplaintStatus.SUBMITTED;
+    private ComplaintStatus status = ComplaintStatus.CREATED;
 
     private String location;
 
+    // Department assignment
+    private Department assignedDepartment = Department.UNASSIGNED;
+    private String departmentRemarks;
+
     // Store officer IDs instead of references
     @Indexed
+    @NotBlank(message = "Assigned officer is required")
     private String assignedToId;
     private String assignedById;
+    @NotBlank(message = "Created by officer is required")
+    private String createdById; // Track who created the complaint
 
     private String assignmentRemarks;
     private LocalDateTime assignedAt;
+
+    // Comments - embedded for better performance (will be populated from comments collection)
+    private List<Comment> comments;
 
     @Indexed
     private LocalDateTime createdAt;
@@ -81,9 +87,6 @@ public class Complaint {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public ComplaintCategory getCategory() { return category; }
-    public void setCategory(ComplaintCategory category) { this.category = category; }
-
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
     public Long getComplaintId() {
@@ -113,6 +116,9 @@ public class Complaint {
     public String getAssignedById() { return assignedById; }
     public void setAssignedById(String assignedById) { this.assignedById = assignedById; }
 
+    public String getCreatedById() { return createdById; }
+    public void setCreatedById(String createdById) { this.createdById = createdById; }
+
     public String getAssignmentRemarks() { return assignmentRemarks; }
     public void setAssignmentRemarks(String assignmentRemarks) { this.assignmentRemarks = assignmentRemarks; }
 
@@ -133,4 +139,21 @@ public class Complaint {
 
     public List<ComplaintHistory> getHistory() { return history; }
     public void setHistory(List<ComplaintHistory> history) { this.history = history; }
+
+    // Department getters and setters
+    public Department getAssignedDepartment() { return assignedDepartment; }
+    public void setAssignedDepartment(Department assignedDepartment) { 
+        this.assignedDepartment = assignedDepartment; 
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public String getDepartmentRemarks() { return departmentRemarks; }
+    public void setDepartmentRemarks(String departmentRemarks) { 
+        this.departmentRemarks = departmentRemarks; 
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    // Comments getters and setters
+    public List<Comment> getComments() { return comments; }
+    public void setComments(List<Comment> comments) { this.comments = comments; }
 }

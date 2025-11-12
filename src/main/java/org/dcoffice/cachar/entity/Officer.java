@@ -34,9 +34,11 @@ public class Officer {
     private OfficerRole role;
 
     @JsonIgnore
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     private boolean isActive = true;
+    private boolean isApproved = false;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -75,6 +77,9 @@ public class Officer {
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
+
+    public boolean isApproved() { return isApproved; }
+    public void setApproved(boolean approved) { isApproved = approved; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

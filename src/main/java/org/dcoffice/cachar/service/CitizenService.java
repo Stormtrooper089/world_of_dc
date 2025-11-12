@@ -64,6 +64,29 @@ public class CitizenService {
         logger.info("OTP sent successfully to mobile number: {}", mobileNumber);
     }
 
+    /**
+     * Send OTP for login only if the citizen is already registered.
+     * Does not auto-create a citizen record.
+     */
+    public void sendOTPForLogin(String mobileNumber) {
+        Optional<Citizen> citizenOpt = citizenRepository.findByMobileNumber(mobileNumber);
+
+        if (!citizenOpt.isPresent()) {
+            throw new CitizenNotFoundException("Citizen not found with mobile number: " + mobileNumber);
+        }
+
+        Citizen citizen = citizenOpt.get();
+        String otp = otpService.generateOTP();
+        citizen.setOtp(otp);
+        citizen.setOtpExpiry(LocalDateTime.now().plusMinutes(5));
+        // Do not change the verified flag for login
+
+        citizenRepository.save(citizen);
+        otpService.sendOTP(mobileNumber, otp);
+
+        logger.info("Login OTP sent successfully to mobile number: {}", mobileNumber);
+    }
+
     public boolean verifyOTP(String mobileNumber, String otp) {
         if (!otpService.isValidOTPFormat(otp)) {
             throw new InvalidOTPException("Invalid OTP format");
@@ -92,6 +115,38 @@ public class CitizenService {
         return false;
     }
 
+    /**
+     * Verify OTP and return the Citizen on success (with verified=true persisted).
+     * Returns null when OTP is invalid or expired. Throws InvalidOTPException for format errors.
+     */
+    public Citizen verifyOTPAndGetCitizen(String mobileNumber, String otp) {
+        if (!otpService.isValidOTPFormat(otp)) {
+            throw new InvalidOTPException("Invalid OTP format");
+        }
+
+        Optional<Citizen> citizenOpt = citizenRepository.findByMobileNumber(mobileNumber);
+
+        if (citizenOpt.isPresent()) {
+            Citizen citizen = citizenOpt.get();
+            if (citizen.getOtp() != null &&
+                    citizen.getOtp().equals(otp) &&
+                    citizen.getOtpExpiry() != null &&
+                    citizen.getOtpExpiry().isAfter(LocalDateTime.now())) {
+
+                citizen.setVerified(true);
+                citizen.setOtp(null);
+                citizen.setOtpExpiry(null);
+                citizenRepository.save(citizen);
+
+                logger.info("OTP verified successfully for mobile number: {}", mobileNumber);
+                return citizen;
+            }
+        }
+
+        logger.warn("OTP verification failed for mobile number: {}", mobileNumber);
+        return null;
+    }
+
     public Optional<Citizen> findByMobileNumber(String mobileNumber) {
         return citizenRepository.findByMobileNumber(mobileNumber);
     }
@@ -109,5 +164,49 @@ public class CitizenService {
 
     public Long getTotalVerifiedCitizens() {
         return citizenRepository.countVerifiedCitizens();
+    }
+
+    /**
+     * Create or update a citizen as part of signup and send OTP.
+     * If a verified citizen already exists with the same mobile number, throws IllegalArgumentException.
+     */
+    public Citizen createCitizenAndSendOTP(Citizen citizen) {
+        Optional<Citizen> existingCitizen = citizenRepository.findByMobileNumber(citizen.getMobileNumber());
+
+        if (existingCitizen.isPresent()) {
+            Citizen existing = existingCitizen.get();
+            if (existing.isVerified()) {
+                throw new IllegalArgumentException("Mobile number already registered");
+            }
+
+            // Update details for unverified existing citizen
+            existing.setName(citizen.getName());
+            existing.setEmail(citizen.getEmail());
+            existing.setAddress(citizen.getAddress());
+            existing.setAadharNumber(citizen.getAadharNumber());
+
+            String otp = otpService.generateOTP();
+            existing.setOtp(otp);
+            existing.setOtpExpiry(LocalDateTime.now().plusMinutes(5));
+            existing.setVerified(false);
+
+            citizenRepository.save(existing);
+            otpService.sendOTP(existing.getMobileNumber(), otp);
+
+            logger.info("Signup OTP re-sent to existing unverified mobile: {}", existing.getMobileNumber());
+            return existing;
+        } else {
+            // New citizen: set not verified and send OTP
+            citizen.setVerified(false);
+            String otp = otpService.generateOTP();
+            citizen.setOtp(otp);
+            citizen.setOtpExpiry(LocalDateTime.now().plusMinutes(5));
+
+            Citizen saved = citizenRepository.save(citizen);
+            otpService.sendOTP(saved.getMobileNumber(), otp);
+
+            logger.info("Signup OTP sent to new mobile: {}", saved.getMobileNumber());
+            return saved;
+        }
     }
 }

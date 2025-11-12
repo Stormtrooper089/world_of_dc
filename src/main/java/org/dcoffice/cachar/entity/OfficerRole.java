@@ -12,6 +12,7 @@ public enum OfficerRole {
     EDUCATION_OFFICER("Education Officer"),
     PWD_OFFICER("PWD Officer"),
     POLICE_OFFICER("Police Officer"),
+    OFFICER("Officer"),
     OTHER("Other");
 
     private final String displayName;

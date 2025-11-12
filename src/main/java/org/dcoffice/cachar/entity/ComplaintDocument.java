@@ -11,7 +11,7 @@ public class ComplaintDocument {
     @Id
     private String id;
 
-    private Long complaintId;  // Used to link with Complaint entity
+    private String complaintId;  // Used to link with Complaint entity (MongoDB ObjectId)
     private String complaintNumber;
     private String fileName;
     private String originalFileName;
@@ -38,8 +38,8 @@ public class ComplaintDocument {
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
-    public Long getComplaintId() { return complaintId; }
-    public void setComplaintId(Long complaintId) { this.complaintId = complaintId; }
+    public String getComplaintId() { return complaintId; }
+    public void setComplaintId(String complaintId) { this.complaintId = complaintId; }
 
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }

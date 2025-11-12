@@ -7,13 +7,13 @@ public class AssignComplaintRequest {
     private Long complaintId;
 
     @NotNull(message = "Officer ID is required")
-    private Long officerId;
+    private String officerId;
 
     private String remarks;
 
     public AssignComplaintRequest() {}
 
-    public AssignComplaintRequest(Long complaintId, Long officerId, String remarks) {
+    public AssignComplaintRequest(Long complaintId, String officerId, String remarks) {
         this.complaintId = complaintId;
         this.officerId = officerId;
         this.remarks = remarks;
@@ -22,8 +22,8 @@ public class AssignComplaintRequest {
     public Long getComplaintId() { return complaintId; }
     public void setComplaintId(Long complaintId) { this.complaintId = complaintId; }
 
-    public Long getOfficerId() { return officerId; }
-    public void setOfficerId(Long officerId) { this.officerId = officerId; }
+    public String getOfficerId() { return officerId; }
+    public void setOfficerId(String officerId) { this.officerId = officerId; }
 
     public String getRemarks() { return remarks; }
     public void setRemarks(String remarks) { this.remarks = remarks; }

@@ -2,9 +2,13 @@
 // ComplaintService.java
 package org.dcoffice.cachar.service;
 
+import org.dcoffice.cachar.dto.ComplaintUpdateRequest;
+import org.dcoffice.cachar.dto.ComplaintDepartmentAssignmentRequest;
 import org.dcoffice.cachar.entity.*;
 import org.dcoffice.cachar.exception.ComplaintNotFoundException;
 import org.dcoffice.cachar.repository.ComplaintRepository;
+import org.dcoffice.cachar.repository.CommentRepository;
+import org.dcoffice.cachar.repository.ComplaintDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,10 +42,23 @@ public class ComplaintService {
     @Autowired
     private CounterService counterService;
 
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private ComplaintDocumentRepository complaintDocumentRepository;
+
     public Complaint createComplaint(Complaint complaint, List<MultipartFile> files) {
         // Generate complaint number
         complaint.setComplaintNumber(generateComplaintNumber());
         complaint.setComplaintId(counterService.getNextSequence("complaintId"));
+        
+        // Assign the creator as the assigned officer if createdById is set
+        if (complaint.getCreatedById() != null && !complaint.getCreatedById().isEmpty()) {
+            complaint.setAssignedToId(complaint.getCreatedById());
+            complaint.setAssignedAt(LocalDateTime.now());
+        }
+        
         // Save complaint first
         Complaint savedComplaint = complaintRepository.save(complaint);
         logger.info("Created complaint: {} for citizen: {}", savedComplaint.getComplaintNumber(),
@@ -63,14 +80,14 @@ public class ComplaintService {
                 savedComplaint,
                 null, // actor is null because it's submitted by citizen
                 null, // no previous status
-                ComplaintStatus.SUBMITTED,
+                ComplaintStatus.CREATED,
                 "Complaint submitted by citizen"
         );
 
         return savedComplaint;
     }
 
-    public Complaint assignComplaint(Long complaintId, Long officerId, String remarks, Officer assignedBy) {
+    public Complaint assignComplaint(Long complaintId, String officerId, String remarks, Officer assignedBy) {
         Complaint complaint = getComplaintById(complaintId);
         Officer officer = officerService.getOfficerById(officerId);
 
@@ -117,8 +134,16 @@ public class ComplaintService {
         return complaintRepository.findByCitizenId(citizenMobile);
     }
 
-    public List<Complaint> getComplaintsByOfficer(Long officerId) {
-        return complaintRepository.findByAssignedToId(String.valueOf(officerId));
+    public List<Complaint> getComplaintsByOfficer(String officerId) {
+        return complaintRepository.findByAssignedToId(officerId);
+    }
+
+    public List<Complaint> getComplaintsCreatedByOfficer(String officerId) {
+        return complaintRepository.findByCreatedById(officerId);
+    }
+
+    public List<Complaint> getAllComplaints() {
+        return complaintRepository.findAll();
     }
 
     public List<Complaint> getUnassignedComplaints() {
@@ -129,13 +154,13 @@ public class ComplaintService {
         return complaintRepository.findByStatus(status);
     }
 
-    public List<Complaint> getComplaintsByCategory(ComplaintCategory category) {
-        return complaintRepository.findByCategory(category);
-    }
-
     public List<Complaint> getRecentComplaints(int days) {
         LocalDateTime fromDate = LocalDateTime.now().minusDays(days);
         return complaintRepository.findRecentComplaints(fromDate);
+    }
+
+    public Optional<Complaint> findByComplaintId(Long complaintId) {
+        return complaintRepository.findByComplaintId(complaintId);
     }
 
     public Optional<Complaint> findByComplaintNumber(String complaintNumber) {
@@ -143,9 +168,32 @@ public class ComplaintService {
     }
 
     public Complaint getComplaintById(Long id) {
-        return complaintRepository.findById(String.valueOf(id))
+        return complaintRepository.findByComplaintId(id)
                 .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with ID: " + id));
     }
+
+    public Complaint getComplaintByIdString(String id) {
+        try {
+            return complaintRepository.findById(id)
+                    .orElseThrow(() -> new ComplaintNotFoundException("Complaint not found with ID: " + id));
+        } catch (Exception e) {
+            logger.error("Error finding complaint by ID string: {}", id, e);
+            return null;
+        }
+    }
+
+    public Complaint getComplaintWithComments(Long id) {
+        Complaint complaint = getComplaintById(id);
+        List<Comment> comments = commentRepository.findByComplaintIdOrderByCreatedAtAsc(complaint.getId());
+        complaint.setComments(comments);
+
+        // Load documents for the complaint
+        List<ComplaintDocument> documents = complaintDocumentRepository.findByComplaintId(complaint.getId());
+        complaint.setDocuments(documents);
+
+        return complaint;
+    }
+
 
     public Complaint getComplaintByNumber(String complaintNumber) {
         return complaintRepository.findByComplaintNumber(complaintNumber)
@@ -156,12 +204,131 @@ public class ComplaintService {
         return complaintRepository.count();
     }
 
-    public Long getActiveComplaintsByOfficer(Long officerId) {
-        return complaintRepository.countActiveComplaintsByOfficer(String.valueOf(officerId));
+    public Long getActiveComplaintsByOfficer(String officerId) {
+        return complaintRepository.countActiveComplaintsByOfficer(officerId);
     }
 
     public Long getComplaintsInDateRange(LocalDateTime startDate, LocalDateTime endDate) {
         return complaintRepository.countComplaintsByDateRange(startDate, endDate);
+    }
+
+    /**
+     * Update complaint details - complaint creator or admin roles can update
+     */
+    public Complaint updateComplaint(ComplaintUpdateRequest request, String currentOfficerId, String currentRole) {
+        Complaint complaint = getComplaintById(request.getComplaintId());
+        
+        // Check authorization - complaint creator or admin roles can update
+        boolean isAdminRole = "ROLE_DISTRICT_COMMISSIONER".equals(currentRole) ||
+                              "ROLE_ADDITIONAL_DISTRICT_COMMISSIONER".equals(currentRole);
+        boolean isComplaintCreator = complaint.getCreatedById().equals(currentOfficerId);
+        boolean isComplaintAssignee = complaint.getAssignedToId().equals(currentOfficerId);
+
+        if (!isAdminRole && !isComplaintCreator && !isComplaintAssignee) {
+            throw new SecurityException("Access denied: Only complaint creator, assignee or admin roles can update complaints");
+        }
+        
+        // Update fields if provided
+        if (request.getSubject() != null && !request.getSubject().trim().isEmpty()) {
+            complaint.setSubject(request.getSubject().trim());
+        }
+        if (request.getDescription() != null && !request.getDescription().trim().isEmpty()) {
+            complaint.setDescription(request.getDescription().trim());
+        }
+        if (request.getLocation() != null) {
+            complaint.setLocation(request.getLocation());
+        }
+        if (request.getPriority() != null) {
+            complaint.setPriority(request.getPriority());
+        }
+        if (request.getStatus() != null) {
+            ComplaintStatus previous = complaint.getStatus();
+            ComplaintStatus next = request.getStatus();
+            if (!ComplaintStatus.isValidTransition(previous, next)) {
+                throw new IllegalArgumentException("Invalid status transition: " + previous + " -> " + next);
+            }
+            complaint.setStatus(next);
+        }
+        if (request.getAssignedDepartment() != null) {
+            complaint.setAssignedDepartment(request.getAssignedDepartment());
+        }
+        if (request.getDepartmentRemarks() != null) {
+            complaint.setDepartmentRemarks(request.getDepartmentRemarks());
+        }
+        if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
+            // Verify officer exists and is approved
+            Officer officer = officerService.getOfficerById(request.getAssignedToId());
+            if (officer == null || !officer.isApproved()) {
+                throw new IllegalArgumentException("Invalid or unapproved officer ID: " + request.getAssignedToId());
+            }
+            String previousOfficerId = complaint.getAssignedToId();
+            complaint.setAssignedToId(request.getAssignedToId());
+            complaint.setAssignedById(currentOfficerId);
+            complaint.setAssignedAt(LocalDateTime.now());
+            logger.info("Complaint {} reassigned from {} to {}", 
+                complaint.getComplaintNumber(), 
+                previousOfficerId != null ? previousOfficerId : "unassigned", 
+                request.getAssignedToId());
+        }
+        
+        // Add to history
+        String historyMessage = "Complaint updated";
+        if (request.getAssignedDepartment() != null) {
+            historyMessage += " and assigned to " + request.getAssignedDepartment().getDisplayName();
+        }
+        if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
+            historyMessage += " and officer reassigned";
+        }
+        addToHistory(complaint, historyMessage, null, currentOfficerId);
+        
+        return complaintRepository.save(complaint);
+    }
+    
+    /**
+     * Assign complaint to department - only DC can assign
+     */
+    public Complaint assignComplaintToDepartment(ComplaintDepartmentAssignmentRequest request, String currentOfficerId, String currentRole) {
+        if (!"ROLE_DISTRICT_COMMISSIONER".equals(currentRole)) {
+            throw new SecurityException("Access denied: Only District Commissioner can assign departments");
+        }
+        
+        Complaint complaint = getComplaintById(request.getComplaintId());
+        complaint.setAssignedDepartment(request.getDepartment());
+        complaint.setDepartmentRemarks(request.getAssignmentRemarks());
+        
+        // Add to history
+        addToHistory(complaint, "Department assigned to " + request.getDepartment().getDisplayName(), 
+                    request.getAssignmentRemarks(), currentOfficerId);
+        
+        return complaintRepository.save(complaint);
+    }
+    
+    
+    /**
+     * Add entry to complaint history
+     */
+    private void addToHistory(Complaint complaint, String action, String remarks, String updatedBy) {
+        if (complaint.getHistory() == null) {
+            complaint.setHistory(new java.util.ArrayList<>());
+        }
+        
+        ComplaintHistory historyEntry = new ComplaintHistory();
+        historyEntry.setComplaintNumber(complaint.getComplaintNumber());
+        // Capture previous status if possible (last history entry), else null
+        ComplaintStatus previous = null;
+        java.util.List<ComplaintHistory> h = complaint.getHistory();
+        if (!h.isEmpty()) {
+            previous = h.get(h.size() - 1).getNewStatus();
+        } else {
+            previous = null;
+        }
+        historyEntry.setPreviousStatus(previous);
+        historyEntry.setNewStatus(complaint.getStatus());
+        historyEntry.setRemarks(action + ": " + remarks);
+        historyEntry.setOfficerId(updatedBy);
+        historyEntry.setTimestamp(LocalDateTime.now());
+        
+        complaint.getHistory().add(historyEntry);
     }
 
     private String generateComplaintNumber() {

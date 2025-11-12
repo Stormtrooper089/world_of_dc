@@ -23,6 +23,9 @@ public class CitizenController {
     @Autowired
     private CitizenService citizenService;
 
+    @Autowired
+    private org.dcoffice.cachar.service.JwtService jwtService;
+
     @PostMapping("/send-otp")
     public ResponseEntity<ApiResponse<Void>> sendOTP(@Valid @RequestBody OTPRequest request) {
         try {
@@ -34,16 +37,30 @@ public class CitizenController {
         }
     }
 
-    @PostMapping("/verify-otp")
-    public ResponseEntity<ApiResponse<Void>> verifyOTP(@Valid @RequestBody OTPRequest request) {
-        try {
-            boolean isValid = citizenService.verifyOTP(request.getMobileNumber(), request.getOtp());
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<Void>> loginWithMobile(@Valid @RequestBody OTPRequest request) {
+        // Let CitizenNotFoundException and other runtime exceptions propagate
+        // so the application's GlobalExceptionHandler can map them to proper HTTP responses.
+        citizenService.sendOTPForLogin(request.getMobileNumber());
+        return ResponseEntity.ok(ApiResponse.success("Login OTP sent successfully"));
+    }
 
-            if (isValid) {
-                return ResponseEntity.ok(ApiResponse.success("OTP verified successfully"));
-            } else {
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> verifyOTP(@Valid @RequestBody OTPRequest request) {
+        try {
+            org.dcoffice.cachar.entity.Citizen citizen = citizenService.verifyOTPAndGetCitizen(request.getMobileNumber(), request.getOtp());
+
+            if (citizen == null) {
                 return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP"));
             }
+
+            // Issue JWT for the verified citizen
+            String token = jwtService.generateTokenForCitizen(citizen);
+            java.util.Map<String, String> data = new java.util.HashMap<>();
+            data.put("token", token);
+            data.put("citizenId", citizen.getId());
+
+            return ResponseEntity.ok(ApiResponse.success("OTP verified successfully", data));
         } catch (Exception e) {
             logger.error("OTP verification failed for {}: {}", request.getMobileNumber(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error("OTP verification failed: " + e.getMessage()));
@@ -53,14 +70,9 @@ public class CitizenController {
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> registerCitizen(@Valid @RequestBody Citizen citizen) {
         try {
-            // Verify that mobile number is already verified
-            if (!citizenService.isCitizenVerified(citizen.getMobileNumber())) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("Mobile number not verified. Please verify OTP first."));
-            }
-
-            Citizen savedCitizen = citizenService.registerOrUpdateCitizen(citizen);
-            return ResponseEntity.ok(ApiResponse.success("Citizen registered successfully", savedCitizen.getId()));
+            // Create citizen (or update unverified existing) and send signup OTP.
+            Citizen savedCitizen = citizenService.createCitizenAndSendOTP(citizen);
+            return ResponseEntity.ok(ApiResponse.success("Signup initiated. OTP sent to mobile number.", savedCitizen.getId()));
         } catch (Exception e) {
             logger.error("Citizen registration failed for {}: {}", citizen.getMobileNumber(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error("Registration failed: " + e.getMessage()));

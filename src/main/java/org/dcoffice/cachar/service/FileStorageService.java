@@ -85,7 +85,8 @@ public class FileStorageService {
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
             ComplaintDocument document = new ComplaintDocument();
-            document.setId(complaint.getId());
+            document.setComplaintId(complaint.getId());
+            document.setComplaintNumber(complaint.getComplaintNumber());
             document.setFileName(fileName);
             document.setOriginalFileName(originalFileName);
             document.setFileType(file.getContentType());
@@ -131,11 +132,11 @@ public class FileStorageService {
         }
     }
 
-    public List<ComplaintDocument> getComplaintDocuments(Long complaintId) {
+    public List<ComplaintDocument> getComplaintDocuments(String complaintId) {
         return documentRepository.findByComplaintId(complaintId);
     }
-    public List<ComplaintDocument> getComplaintDocuments(String complaintId) {
-        return documentRepository.findByComplaintNumber(complaintId);
+    public List<ComplaintDocument> getComplaintDocumentsByNumber(String complaintNumber) {
+        return documentRepository.findByComplaintNumber(complaintNumber);
     }
 
     private void validateFile(MultipartFile file) {
@@ -156,6 +157,32 @@ public class FileStorageService {
     private String generateUniqueFileName(String originalFileName) {
         String extension = getFileExtension(originalFileName);
         return UUID.randomUUID().toString() + "." + extension;
+    }
+
+    public String storeFile(MultipartFile file, String subDirectory) throws IOException {
+        validateFile(file);
+
+        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+        String fileName = generateUniqueFileName(originalFileName);
+
+        try {
+            if (originalFileName.contains("..")) {
+                throw new FileStorageException("Invalid file name: " + originalFileName);
+            }
+
+            // Create subdirectory if it doesn't exist
+            Path subDir = this.fileStorageLocation.resolve(subDirectory);
+            if (!Files.exists(subDir)) {
+                Files.createDirectories(subDir);
+            }
+
+            Path targetLocation = subDir.resolve(fileName);
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+            return subDirectory + "/" + fileName;
+        } catch (IOException ex) {
+            throw new FileStorageException("Could not store file " + originalFileName + ". Please try again!", ex);
+        }
     }
 
     private String getFileExtension(String fileName) {
