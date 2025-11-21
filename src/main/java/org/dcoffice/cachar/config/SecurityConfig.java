@@ -75,7 +75,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/api/citizen/send-otp").permitAll()
                 .antMatchers("/api/citizen/verify-otp").permitAll()
                 .antMatchers("/api/citizen/register").permitAll()
-                .antMatchers(HttpMethod.GET, "/api/citizen/profile/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/api/citizen/profile/{mobileNumber}").permitAll()
 
                 // Public complaint tracking (anyone can track complaints)
                 .antMatchers(HttpMethod.GET, "/api/complaints/track/**").permitAll()

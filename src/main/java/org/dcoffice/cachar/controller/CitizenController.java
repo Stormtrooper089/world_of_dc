@@ -1,6 +1,7 @@
 package org.dcoffice.cachar.controller;
 
 import org.dcoffice.cachar.dto.ApiResponse;
+import org.dcoffice.cachar.dto.CitizenUpdateRequest;
 import org.dcoffice.cachar.dto.OTPRequest;
 import org.dcoffice.cachar.entity.Citizen;
 import org.dcoffice.cachar.service.CitizenService;
@@ -8,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -91,6 +93,49 @@ public class CitizenController {
         } catch (Exception e) {
             logger.error("Failed to get citizen profile for {}: {}", mobileNumber, e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error("Failed to retrieve profile: " + e.getMessage()));
+        }
+    }
+
+    // Get current citizen profile (authenticated)
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<Citizen>> getCurrentCitizenProfile(Authentication authentication) {
+        try {
+            String citizenId = authentication.getName();
+            Optional<Citizen> citizenOpt = citizenService.findById(citizenId);
+            if (citizenOpt.isPresent()) {
+                return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", citizenOpt.get()));
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to get citizen profile: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Failed to retrieve profile: " + e.getMessage()));
+        }
+    }
+
+    // Update citizen profile (authenticated)
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<Citizen>> updateCitizenProfile(@Valid @RequestBody CitizenUpdateRequest request, Authentication authentication) {
+        try {
+            String citizenId = authentication.getName();
+            Optional<Citizen> existingCitizenOpt = citizenService.findById(citizenId);
+            
+            if (!existingCitizenOpt.isPresent()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Create a Citizen object with updated fields
+            Citizen updatedCitizen = new Citizen();
+            updatedCitizen.setName(request.getName());
+            updatedCitizen.setEmail(request.getEmail());
+            updatedCitizen.setAddress(request.getAddress());
+            updatedCitizen.setPincode(request.getPincode());
+            
+            Citizen updated = citizenService.updateCitizen(citizenId, updatedCitizen);
+            return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", updated));
+        } catch (Exception e) {
+            logger.error("Failed to update citizen profile: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error("Profile update failed: " + e.getMessage()));
         }
     }
 }

@@ -171,6 +171,37 @@ public class CitizenService {
     }
 
     /**
+     * Update citizen profile information
+     */
+    public Citizen updateCitizen(String citizenId, Citizen updatedCitizen) {
+        Optional<Citizen> existingCitizenOpt = citizenRepository.findById(citizenId);
+        if (!existingCitizenOpt.isPresent()) {
+            throw new CitizenNotFoundException("Citizen not found with id: " + citizenId);
+        }
+
+        Citizen existing = existingCitizenOpt.get();
+        
+        // Update only the allowed fields
+        if (updatedCitizen.getName() != null && !updatedCitizen.getName().trim().isEmpty()) {
+            existing.setName(updatedCitizen.getName().trim());
+        }
+        if (updatedCitizen.getEmail() != null && !updatedCitizen.getEmail().trim().isEmpty()) {
+            existing.setEmail(updatedCitizen.getEmail().trim());
+        }
+        if (updatedCitizen.getAddress() != null) {
+            existing.setAddress(updatedCitizen.getAddress().trim());
+        }
+        if (updatedCitizen.getPincode() != null && !updatedCitizen.getPincode().trim().isEmpty()) {
+            existing.setPincode(updatedCitizen.getPincode().trim());
+        }
+        
+        existing.setUpdatedAt(LocalDateTime.now());
+        
+        logger.info("Updated citizen profile for id: {}", citizenId);
+        return citizenRepository.save(existing);
+    }
+
+    /**
      * Create or update a citizen as part of signup and send OTP.
      * If a verified citizen already exists with the same mobile number, throws IllegalArgumentException.
      */

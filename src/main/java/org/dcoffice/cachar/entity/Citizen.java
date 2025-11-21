@@ -31,6 +31,9 @@ public class Citizen {
 
     private String address;
 
+    @Pattern(regexp = "^\\d{6}$", message = "Invalid pincode format")
+    private String pincode;
+
     @Pattern(regexp = "^\\d{12}$", message = "Invalid Aadhar number")
     private String aadharNumber;
 
@@ -67,6 +70,9 @@ public class Citizen {
 
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
+
+    public String getPincode() { return pincode; }
+    public void setPincode(String pincode) { this.pincode = pincode; }
 
     public String getAadharNumber() { return aadharNumber; }
     public void setAadharNumber(String aadharNumber) { this.aadharNumber = aadharNumber; }
