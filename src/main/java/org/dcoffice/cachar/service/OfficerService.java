@@ -43,7 +43,7 @@ public class OfficerService {
      * Signup a new officer. Officer will be created with isApproved=true for testing.
      */
     public Officer signupOfficer(Officer officer) {
-        officer.setApproved(true); // Auto-approve for testing
+        officer.setApproved(false);
         officer.setActive(true);
         return createOfficer(officer);
     }
