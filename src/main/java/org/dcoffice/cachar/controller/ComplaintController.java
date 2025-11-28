@@ -17,6 +17,7 @@ import org.dcoffice.cachar.repository.ComplaintDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -67,6 +68,9 @@ public class ComplaintController {
     @Autowired
     private ComplaintDocumentRepository complaintDocumentRepository;
 
+    @Value("${file.max-size:10485760}") // Default: 10MB in bytes (10 * 1024 * 1024)
+    private long maxFileSize;
+
     @PostMapping("/create")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createComplaint(
             @RequestParam(value = "mobileNumber", required = false) String mobileNumber,
@@ -97,10 +101,11 @@ public class ComplaintController {
                         return ResponseEntity.badRequest()
                                 .body(ApiResponse.error("Invalid file type. Only images, videos, PDFs, and documents are allowed."));
                     }
-                    // Check file size (max 10MB per file)
-                    if (file.getSize() > 10 * 1024 * 1024) {
+                    // Check file size using configured limit
+                    if (file.getSize() > maxFileSize) {
+                        long maxSizeMB = maxFileSize / (1024 * 1024);
                         return ResponseEntity.badRequest()
-                                .body(ApiResponse.error("File size too large. Maximum allowed size is 10MB per file."));
+                                .body(ApiResponse.error("File size too large. Maximum allowed size is " + maxSizeMB + "MB per file."));
                     }
                 }
             }

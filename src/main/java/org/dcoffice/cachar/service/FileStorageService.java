@@ -37,10 +37,12 @@ public class FileStorageService {
             "image/png",
             "image/gif"
     );
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
+
+    @Value("${file.max-size:10485760}") // Default: 10MB in bytes (10 * 1024 * 1024)
+    private long maxFileSize;
 
     @Autowired
     private ComplaintDocumentRepository documentRepository;
@@ -140,8 +142,9 @@ public class FileStorageService {
     }
 
     private void validateFile(MultipartFile file) {
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new FileStorageException("File size exceeds maximum limit of 10MB");
+        if (file.getSize() > maxFileSize) {
+            long maxSizeMB = maxFileSize / (1024 * 1024);
+            throw new FileStorageException("File size exceeds maximum limit of " + maxSizeMB + "MB");
         }
 
         String contentType = file.getContentType();

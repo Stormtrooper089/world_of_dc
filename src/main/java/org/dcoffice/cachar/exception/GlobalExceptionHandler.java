@@ -3,6 +3,7 @@ package org.dcoffice.cachar.exception;
 import org.dcoffice.cachar.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -19,6 +20,9 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @Value("${file.max-size:10485760}") // Default: 10MB in bytes
+    private long maxFileSize;
 
     @ExceptionHandler(CitizenNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleCitizenNotFound(CitizenNotFoundException e) {
@@ -58,8 +62,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException e) {
         logger.error("File size exceeds limit: {}", e.getMessage());
+        long maxSizeMB = maxFileSize / (1024 * 1024);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error("File size too large. Maximum allowed size is 10MB per file."));
+                .body(ApiResponse.error("File size too large. Maximum allowed size is " + maxSizeMB + "MB per file."));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
