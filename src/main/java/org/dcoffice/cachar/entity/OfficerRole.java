@@ -4,6 +4,8 @@ package org.dcoffice.cachar.entity;
 public enum OfficerRole {
     DISTRICT_COMMISSIONER("District Commissioner"),
     ADDITIONAL_DISTRICT_COMMISSIONER("Additional District Commissioner"),
+    ASSISTANT_DISTRICT_COMMISSIONER("Assistant District Commissioner"),
+    ASSISTANT_COMMISSIONER("Assistant Commissioner"),
     CIRCLE_OFFICER("Circle Officer"),
     BLOCK_DEVELOPMENT_OFFICER("Block Development Officer"),
     TEHSILDAR("Tehsildar"),
