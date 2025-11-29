@@ -98,10 +98,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 case "DISTRICT_COMMISSIONER":
                 case "ADDITIONAL_DISTRICT_COMMISSIONER":
                 case "BLOCK_DEVELOPMENT_OFFICER":
+                case "GRAM_PANCHAYAT_OFFICER":
                 case "TEHSILDAR":
                 case "SUB_DIVISIONAL_OFFICER":
                 case "HEALTH_OFFICER":
                 case "EDUCATION_OFFICER":
+                case "REVENUE_OFFICER":
+                case "AGRICULTURE_OFFICER":
+                case "PUBLIC_WORKS_OFFICER":
                 case "PWD_OFFICER":
                 case "POLICE_OFFICER":
                     return officerService.findById(userId).orElse(null);
