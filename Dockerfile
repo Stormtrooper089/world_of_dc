@@ -1,4 +1,22 @@
-# Use Eclipse Temurin OpenJDK 17 as the base image
+# Multi-stage build: Build stage
+FROM maven:3.9.4-eclipse-temurin-17 AS build
+
+# Set working directory
+WORKDIR /app
+
+# Copy pom.xml first for better caching
+COPY pom.xml .
+
+# Download dependencies (cached if pom.xml hasn't changed)
+RUN mvn dependency:go-offline -B
+
+# Copy source code
+COPY src ./src
+
+# Build the application
+RUN mvn clean package -DskipTests
+
+# Runtime stage
 FROM eclipse-temurin:17-jdk
 
 # Install curl for health checks
@@ -10,8 +28,8 @@ WORKDIR /app
 # Create directories for file uploads and logs
 RUN mkdir -p uploads logs
 
-# Copy the JAR file from target directory
-COPY target/world_of_dc-1.0-SNAPSHOT.jar app.jar
+# Copy the JAR file from build stage
+COPY --from=build /app/target/world_of_dc-1.0-SNAPSHOT.jar app.jar
 
 # Expose the port the app runs on
 EXPOSE 8080
