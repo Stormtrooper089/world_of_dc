@@ -1,0 +1,78 @@
+# Exclude target directory (will be built inside container)
+target/
+
+# IDE and system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed for build)
+README.md
+DOCKER_DEPLOYMENT_README.md
+
+# Environment files (not needed for build)
+.env
+env.example
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Node modules (if any)
+node_modules/
+
+# Test files (optional - can be included if needed)
+# src/test/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Node modules (if any)
+node_modules/
+
+# Test files
+src/test/

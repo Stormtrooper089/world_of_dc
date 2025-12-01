@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+      # Spring Boot automatically maps SPRING_DATA_MONGODB_URI to spring.data.mongodb.uri
+      # This takes precedence over the properties file
+      - SPRING_DATA_MONGODB_URI=${MONGODB_URI}
+      # Also set MONGODB_URI for properties file fallback
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
+      - SMS_PROVIDER=${SMS_PROVIDER}
+      - SMS_API_KEY=${SMS_API_KEY}
+      - SMS_SENDER_ID=${SMS_SENDER_ID}
+      - FILE_UPLOAD_DIR=${FILE_UPLOAD_DIR}
+      - FILE_MAX_SIZE=${FILE_MAX_SIZE}
+      - COMPLAINT_NUMBER_PREFIX=${COMPLAINT_NUMBER_PREFIX}
+      - COMPLAINT_NUMBER_LENGTH=${COMPLAINT_NUMBER_LENGTH}
+      - LOGGING_LEVEL_ROOT=${LOGGING_LEVEL_ROOT}
+      - LOGGING_LEVEL_APP=${LOGGING_LEVEL_APP}
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  uploads:
+  logs:
