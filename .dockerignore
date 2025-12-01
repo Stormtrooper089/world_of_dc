@@ -1,0 +1,41 @@
+# Maven - exclude everything except the JAR file
+target/
+!target/world_of_dc-1.0-SNAPSHOT.jar
+pom.xml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Node modules (if any)
+node_modules/
+
+# Test files
+src/test/

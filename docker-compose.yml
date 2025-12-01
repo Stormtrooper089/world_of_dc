@@ -1,0 +1,48 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/cachar_complaints}
+      - FILE_UPLOAD_DIR=${FILE_UPLOAD_DIR:-/app/uploads}
+      - JWT_SECRET=${JWT_SECRET:-mySecretKey123456789012345678901234567890}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS:-3600000}
+      - SMS_PROVIDER=${SMS_PROVIDER:-console}
+      - SMS_API_KEY=${SMS_API_KEY:-your_sms_api_key}
+      - SMS_SENDER_ID=${SMS_SENDER_ID:-CACHAR}
+      - FILE_MAX_SIZE=${FILE_MAX_SIZE:-10485760}
+      - COMPLAINT_NUMBER_PREFIX=${COMPLAINT_NUMBER_PREFIX:-CCR}
+      - COMPLAINT_NUMBER_LENGTH=${COMPLAINT_NUMBER_LENGTH:-18}
+      - LOGGING_LEVEL_ROOT=${LOGGING_LEVEL_ROOT:-WARN}
+      - LOGGING_LEVEL_APP=${LOGGING_LEVEL_APP:-INFO}
+    depends_on:
+      - mongodb
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    networks:
+      - cachar-network
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=cachar_complaints
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - cachar-network
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  uploads:
+  logs:
+
+networks:
+  cachar-network:
+    driver: bridge
