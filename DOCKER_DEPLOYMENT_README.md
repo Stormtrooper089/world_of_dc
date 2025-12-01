@@ -1,34 +1,91 @@
 # Docker Deployment Guide
 
-This guide explains how to deploy the Cachar District Complaint Management System using Docker.
+This guide explains how to deploy the Cachar District Complaint Management System using Docker with MongoDB Atlas for production.
 
 ## Prerequisites
 
 - Docker and Docker Compose installed on your system
 - At least 2GB of available RAM
 - At least 5GB of available disk space
+- MongoDB Atlas account (for production deployment)
+
+## MongoDB Atlas Setup (Production)
+
+### 1. Create MongoDB Atlas Account
+
+1. Go to [MongoDB Atlas](https://www.mongodb.com/atlas)
+2. Create a free account or sign in
+3. Create a new project
+
+### 2. Create Cluster
+
+1. Click "Create" → "M0 Cluster" (free tier)
+2. Choose your cloud provider and region
+3. Name your cluster (e.g., "cachar-cluster")
+4. Click "Create Cluster"
+
+### 3. Set up Database User
+
+1. Go to "Database Access" → "Add New Database User"
+2. Choose "Password" authentication
+3. Create username and password
+4. Set user privileges to "Read and write to any database"
+5. Click "Add User"
+
+### 4. Configure Network Access
+
+1. Go to "Network Access" → "Add IP Address"
+2. For development: Add `0.0.0.0/0` (allow all IPs)
+3. For production: Add your server's IP address
+4. Click "Confirm"
+
+### 5. Get Connection String
+
+1. Go to "Clusters" → "Connect"
+2. Choose "Connect your application"
+3. Select "Java" and version "4.0 or later"
+4. Copy the connection string
+
+### 6. Update Environment Variables
+
+Update your `.env` file with the Atlas connection string:
+
+```env
+MONGODB_URI=mongodb+srv://your_username:your_password@your_cluster.mongodb.net/cachar_complaints?retryWrites=true&w=majority
+```
 
 ## Quick Start
 
-1. **Build and start the application:**
+1. **Configure Environment Variables:**
+   Update the `.env` file with your MongoDB Atlas credentials:
+
+   ```bash
+   # Edit .env file
+   MONGODB_URI=mongodb+srv://your_username:your_password@your_cluster.mongodb.net/cachar_complaints?retryWrites=true&w=majority
+   JWT_SECRET=your_secure_jwt_secret_here_minimum_256_bits_long_and_random
+   SMS_API_KEY=your_actual_sms_api_key
+   ```
+
+2. **Validate Configuration:**
+
+   ```bash
+   ./validate-deployment.sh
+   ```
+
+3. **Deploy Application:**
 
    ```bash
    docker-compose up --build -d
    ```
 
-2. **Check if services are running:**
+4. **Check Status:**
 
    ```bash
    docker-compose ps
-   ```
-
-3. **View logs:**
-
-   ```bash
    docker-compose logs -f app
    ```
 
-4. **Access the application:**
+5. **Access the application:**
    - API: http://localhost:8080
    - Health Check: http://localhost:8080/actuator/health
 
