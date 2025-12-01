@@ -1,46 +1,68 @@
-# Multi-stage build: Build stage
+##############################
+# 1) BUILD STAGE (Maven)
+##############################
 FROM maven:3.9.4-eclipse-temurin-17 AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy pom.xml first for better caching
+# Copy dependencies first for caching
 COPY pom.xml .
-
-# Download dependencies (cached if pom.xml hasn't changed)
 RUN mvn dependency:go-offline -B
 
-# Copy source code
+# Copy full source
 COPY src ./src
 
-# Build the application
+# Build the JAR (skip tests for speed)
 RUN mvn clean package -DskipTests
 
-# Runtime stage
-FROM eclipse-temurin:17-jdk
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+##############################
+# 2) RUNTIME STAGE (Alpine JDK)
+##############################
+FROM eclipse-temurin:17-jdk-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Create directories for file uploads and logs
-RUN mkdir -p uploads logs
+# Create runtime directories
+RUN mkdir -p /app/logs /app/uploads
 
-# Copy the JAR file from build stage
-COPY --from=build /app/target/world_of_dc-1.0-SNAPSHOT.jar app.jar
+# Copy built jar (auto-detect JAR)
+COPY --from=build /app/target/*.jar app.jar
 
-# Expose the port the app runs on
+# Expose port
 EXPOSE 8080
 
-# Set environment variables for production (can be overridden)
-ENV SPRING_PROFILES_ACTIVE=prod
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+##############################
+# LOGGING IMPROVEMENTS
+##############################
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
+# JVM logging options
+ENV JAVA_OPTS="\
+  -Xms256m \
+  -Xmx512m \
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75 \
+  -verbose:gc \
+  -Xlog:gc*:file=/app/logs/gc.log:time,uptime,level,tags \
+"
 
-# Run the application
+# Spring Boot logging to file
+ENV SPRING_OUTPUT_ANSI_ENABLED=ALWAYS
+ENV LOGGING_FILE_PATH=/app/logs
+
+##############################
+# HEALTHCHECK WITHOUT CURL
+##############################
+# Use wget (small on Alpine)
+RUN apk add --no-cache wget
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
+
+
+##############################
+# START THE APPLICATION
+##############################
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
