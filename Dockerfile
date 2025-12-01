@@ -51,7 +51,7 @@ ENV JAVA_OPTS="\
 # Spring Boot logging to file
 ENV SPRING_OUTPUT_ANSI_ENABLED=ALWAYS
 ENV LOGGING_FILE_PATH=/app/logs
-
+ENV JAVA_OPTS="-Dhttps.protocols=TLSv1.2"
 ##############################
 # HEALTHCHECK WITHOUT CURL
 ##############################
