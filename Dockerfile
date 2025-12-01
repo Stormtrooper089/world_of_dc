@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
-# Copy full source
+# Copy full project source
 COPY src ./src
 
 # Build the JAR (skip tests for speed)
@@ -22,23 +22,25 @@ RUN mvn clean package -DskipTests
 ##############################
 FROM eclipse-temurin:17-jdk-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Create runtime directories
+# Create directories
 RUN mkdir -p /app/logs /app/uploads
 
-# Copy built jar (auto-detect JAR)
+# Install required packages + CA certificates for MongoDB Atlas SSL
+RUN apk add --no-cache wget ca-certificates && update-ca-certificates
+
+# Copy JAR from build stage
 COPY --from=build /app/target/*.jar app.jar
 
-# Expose port
+# Expose Spring Boot port
 EXPOSE 8080
 
-##############################
-# LOGGING IMPROVEMENTS
-##############################
 
-# JVM logging options
+
+##############################
+# JVM & LOGGING CONFIG
+##############################
 ENV JAVA_OPTS="\
   -Xms256m \
   -Xmx512m \
@@ -46,23 +48,23 @@ ENV JAVA_OPTS="\
   -XX:MaxRAMPercentage=75 \
   -verbose:gc \
   -Xlog:gc*:file=/app/logs/gc.log:time,uptime,level,tags \
+  -Dhttps.protocols=TLSv1.2 \
 "
 
-# Spring Boot logging to file
 ENV SPRING_OUTPUT_ANSI_ENABLED=ALWAYS
 ENV LOGGING_FILE_PATH=/app/logs
-ENV JAVA_OPTS="-Dhttps.protocols=TLSv1.2"
-##############################
-# HEALTHCHECK WITHOUT CURL
-##############################
-# Use wget (small on Alpine)
-RUN apk add --no-cache wget
 
+
+
+##############################
+# HEALTHCHECK
+##############################
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
     CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
 
 
+
 ##############################
-# START THE APPLICATION
+# START APPLICATION
 ##############################
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
