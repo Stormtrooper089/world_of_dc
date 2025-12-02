@@ -115,6 +115,7 @@ public class CitizenController {
 
     // Get current citizen profile (authenticated)
     @GetMapping("/profile")
+    @PreAuthorize("hasRole('CITIZEN')")
     public ResponseEntity<ApiResponse<Citizen>> getCurrentCitizenProfile(Authentication authentication) {
         try {
             String citizenId = authentication.getName();

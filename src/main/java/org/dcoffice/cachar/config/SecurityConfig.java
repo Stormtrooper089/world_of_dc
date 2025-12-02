@@ -75,7 +75,6 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/api/citizen/send-otp").permitAll()
                 .antMatchers("/api/citizen/verify-otp").permitAll()
                 .antMatchers("/api/citizen/register").permitAll()
-                .antMatchers(HttpMethod.GET, "/api/citizen/profile/{mobileNumber}").permitAll()
                 // Public citizen home page endpoints
                 .antMatchers(HttpMethod.GET, "/api/citizen/carousel").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/citizen/portal-stats").permitAll()
@@ -103,6 +102,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers(HttpMethod.POST, "/api/officer/login").permitAll()
 
                 // ===== PROTECTED ENDPOINTS (Authentication Required) =====
+
+                // Citizen profile endpoints (require citizen authentication)
+                .antMatchers("/api/citizen/profile/**").authenticated()
 
                 // Other officer management endpoints (require authentication)
                 .antMatchers("/api/officer/**").authenticated()
