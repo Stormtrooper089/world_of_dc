@@ -13,7 +13,8 @@ public class OTPService {
     private final Random random = new Random();
 
     public String generateOTP() {
-        return String.format("%06d", random.nextInt(1000000));
+        return("111111");// for now till otp service is
+        //return String.format("%06d", random.nextInt(1000000));
     }
 
     public void sendOTP(String mobileNumber, String otp) {
