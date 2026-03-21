@@ -65,8 +65,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/css/**", "/js/**", "/images/**", "/favicon.ico").permitAll()
                 .antMatchers(HttpMethod.POST, "/api/officer/signup").permitAll()
                 .antMatchers(HttpMethod.POST, "/api/officer/login").permitAll()
-                .antMatchers(HttpMethod.POST, "/api/vehicles/upload").permitAll()
-                .antMatchers(HttpMethod.GET, "/api/vehicles/**").permitAll()
+                // Vehicle APIs - all public
+                .antMatchers("/api/vehicles/**").permitAll()
+                .antMatchers("/api/vehicles").permitAll()
                 // ✅ Polling station endpoints (public for dashboard ingestion)// ✅ Polling station endpoints (public for dashboard ingestion)
                 .antMatchers("/api/polling-stations/**").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/polling-stations/routes/pdf").permitAll()
