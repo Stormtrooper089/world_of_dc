@@ -88,7 +88,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         
         filterChain.doFilter(request, response);
     }
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
 
+        String path = request.getRequestURI();
+
+        // ✅ Skip JWT filter for public endpoints
+        return path.startsWith("/api/vehicles") ||
+                path.startsWith("/api/polling-parties") ||
+                path.startsWith("/api/tracking") ||
+                path.startsWith("/auth") ||
+                path.startsWith("/api/citizen") ||
+                path.startsWith("/actuator") ||
+                path.startsWith("/h2-console");
+    }
     /**
      * Common user validation method for both citizens and officers
      */

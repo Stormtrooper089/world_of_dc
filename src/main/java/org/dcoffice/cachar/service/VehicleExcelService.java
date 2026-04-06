@@ -25,34 +25,32 @@ public class VehicleExcelService {
             Sheet sheet = workbook.getSheetAt(0);
             List<VehicleDetails> list = new ArrayList<>();
 
-            boolean isHeader = true;
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
 
-            for (Row row : sheet) {
-
-                if (isHeader) {
-                    isHeader = false;
-                    continue;
-                }
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
 
                 VehicleDetails v = new VehicleDetails();
 
-                // 🔗 Linking fields (same as polling party)
-                v.setAcNo(get(row, 0));
-                v.setPsNo(get(row, 1));
-                v.setPsName(get(row, 2));
-
                 // 🚗 Vehicle fields
+                v.setVehicleType(get(row, 2));
                 v.setVehicleNo(get(row, 3));
-                v.setDriverName(get(row, 4));
-                v.setDriverMobile(get(row, 5));
-                v.setVehicleType(get(row, 6));
 
-                // safe parsing
-                String cap = get(row, 7);
-                v.setCapacity(cap.isEmpty() ? 0 : Integer.parseInt(cap));
+                // 👤 Driver parsing
+                String driverField = get(row, 4);
+                extractDriverDetails(driverField, v);
 
-                v.setRoute(get(row, 8));
-                v.setRemarks(get(row, 9));
+                // 🏫 PS parsing (from route column)
+                String psField = get(row, 5);
+                extractPsDetails(psField, v);
+
+                // 🛣️ Store full route as well
+                v.setRoute(psField);
+
+                // ⚠️ Fields not present in new Excel
+                v.setAcNo("");
+                v.setRemarks("");
+                v.setCapacity(0);
 
                 v.setUploadTime(System.currentTimeMillis());
 
@@ -66,14 +64,99 @@ public class VehicleExcelService {
         }
     }
 
+    // =========================
+    // 🔧 DRIVER PARSER
+    // =========================
+    private void extractDriverDetails(String driverField, VehicleDetails v) {
+
+        if (driverField == null || driverField.trim().isEmpty()) {
+            v.setDriverName("");
+            v.setDriverMobile("");
+            return;
+        }
+
+        driverField = driverField.trim();
+
+        try {
+            // 🔹 Normalize (replace newline, tabs with space)
+            driverField = driverField.replaceAll("[\\n\\r\\t]+", " ").trim();
+
+            // 🔹 Extract mobile (10-digit number)
+            String mobile = "";
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("\\b\\d{10}\\b")
+                    .matcher(driverField);
+
+            if (matcher.find()) {
+                mobile = matcher.group();
+            }
+
+            // 🔹 Remove mobile from string to get name
+            String name = driverField.replace(mobile, "").replace("-", "").trim();
+
+            v.setDriverName(name);
+            v.setDriverMobile(mobile);
+
+        } catch (Exception e) {
+            v.setDriverName(driverField);
+            v.setDriverMobile("");
+        }
+    }
+
+    // =========================
+    // 🔧 PS PARSER
+    // =========================
+    private void extractPsDetails(String psField, VehicleDetails v) {
+
+        if (psField == null || psField.trim().isEmpty()) {
+            v.setPsNo("");
+            v.setPsName("");
+            return;
+        }
+
+        psField = psField.trim();
+
+        try {
+            // Remove "PS No." prefix if present
+            if (psField.toLowerCase().startsWith("ps no.")) {
+                psField = psField.substring(6).trim();
+            }
+
+            // Split into PS No and Name
+            String[] parts = psField.split(" - ", 2);
+
+            String psNo = parts.length > 0 ? parts[0].trim() : "";
+            String psName = parts.length > 1 ? parts[1].trim() : "";
+
+            v.setPsNo(psNo);
+            v.setPsName(psName);
+
+        } catch (Exception e) {
+            v.setPsNo("");
+            v.setPsName(psField);
+        }
+    }
+
+    // =========================
+    // 🔧 COMMON CELL READER
+    // =========================
     private String get(Row row, int index) {
+
         Cell cell = row.getCell(index);
         if (cell == null) return "";
 
         switch (cell.getCellType()) {
-            case STRING: return cell.getStringCellValue().trim();
-            case NUMERIC: return String.valueOf((long) cell.getNumericCellValue());
-            default: return "";
+            case STRING:
+                return cell.getStringCellValue().trim();
+
+            case NUMERIC:
+                return String.valueOf((long) cell.getNumericCellValue());
+
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+
+            default:
+                return "";
         }
     }
 }
