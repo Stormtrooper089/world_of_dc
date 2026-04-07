@@ -33,47 +33,56 @@ public class VehicleService {
                 .collect(Collectors.toList());
     }
 
-    // Returns list of { vehicleId, vehicleNo } mappings for UI options
-    public List<java.util.Map<String, String>> fetchVehicleIdMappings() {
-        return repository.findAllVehicleIdAndVehicleNo().stream()
-                .filter(v -> v.getVehicleId() != null && !v.getVehicleId().isBlank())
+    // Returns list of { acNo, vehicleNo } mappings for UI options
+    public List<java.util.Map<String, String>> fetchAcNoMappings() {
+        return repository.findAllAcNoAndVehicleNo().stream()
+                .filter(v -> v.getAcNo() != null && !v.getAcNo().isBlank())
                 .map(v -> {
                     java.util.Map<String, String> map = new java.util.LinkedHashMap<>();
-                    map.put("vehicleId", v.getVehicleId());
+                    map.put("acNo", v.getAcNo());
                     map.put("vehicleNo", v.getVehicleNo());
                     return map;
                 })
                 .collect(Collectors.toList());
     }
 
-    public VehicleDetails fetchLocationByVehicleId(String vehicleId) {
-        return repository.findByVehicleId(vehicleId)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found for vehicleId: " + vehicleId));
+    public List<VehicleDetails> fetchLocationByAcNo(String acNo) {
+        List<VehicleDetails> vehicles = repository.findByAcNo(acNo);
+        if (vehicles.isEmpty()) {
+            throw new RuntimeException("Vehicle not found for acNo: " + acNo);
+        }
+        return vehicles;
     }
 
-    public VehicleDetails updateLocationByVehicleId(String vehicleId, VehicleDetails src) {
-        VehicleDetails existing = repository.findByVehicleId(vehicleId)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found for vehicleId: " + vehicleId));
-        boolean locationUpdated = false;
-        if (src.getLocation() != null) {
-            existing.setLocation(src.getLocation());
-            locationUpdated = true;
+    public List<VehicleDetails> updateLocationByAcNo(String acNo, VehicleDetails src) {
+        List<VehicleDetails> existingVehicles = repository.findByAcNo(acNo);
+        if (existingVehicles.isEmpty()) {
+            throw new RuntimeException("Vehicle not found for acNo: " + acNo);
         }
-        if (src.getRemarks() != null) {
-            existing.setRemarks(src.getRemarks());
-        }
-        // if (src.getParkingAddress() != null) {
-        //     existing.setParkingAddress(src.getParkingAddress());
-        //     locationUpdated = true;
-        // }
-        // if (src.getStatusComment() != null) {
-        //     existing.setStatusComment(src.getStatusComment());
-        // }
-        // Auto-update lastLocationUpdate timestamp when location changes
-        if (locationUpdated) {
-            existing.setLastLocationUpdate(System.currentTimeMillis());
-        }
-        return repository.save(existing);
+
+        existingVehicles.forEach(existing -> {
+            boolean locationUpdated = false;
+            if (src.getLocation() != null) {
+                existing.setLocation(src.getLocation());
+                locationUpdated = true;
+            }
+            if (src.getRemarks() != null) {
+                existing.setRemarks(src.getRemarks());
+            }
+            if (src.getParkingAddress() != null) {
+                existing.setParkingAddress(src.getParkingAddress());
+                locationUpdated = true;
+            }
+            if (src.getStatusComment() != null) {
+                existing.setStatusComment(src.getStatusComment());
+            }
+            // Auto-update lastLocationUpdate timestamp when location or parkingAddress changes
+            if (locationUpdated) {
+                existing.setLastLocationUpdate(System.currentTimeMillis());
+            }
+        });
+
+        return repository.saveAll(existingVehicles);
     }
 
     public VehicleDetails create(VehicleDetails vehicle) {
@@ -136,7 +145,6 @@ public class VehicleService {
             }
         }
         if (src.getStatusComment() != null)  target.setStatusComment(src.getStatusComment());
-        if (src.getVehicleId() != null)   target.setVehicleId(src.getVehicleId());
         if (src.getLastLocationUpdate() != null) target.setLastLocationUpdate(src.getLastLocationUpdate());
     }
 }

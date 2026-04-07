@@ -82,26 +82,26 @@ public class VehicleController {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 🆔 Fetch vehicleId → vehicleNo mappings (UI options)
+    // 🆔 Fetch acNo → vehicleNo mappings (UI options)
     // GET /api/vehicles/vehicle-id-mappings
     // ─────────────────────────────────────────────────────────────
     @GetMapping("/vehicle-id-mappings")
     public ResponseEntity<ApiResponse<List<java.util.Map<String, String>>>> fetchVehicleIdMappings() {
-        List<java.util.Map<String, String>> mappings = vehicleService.fetchVehicleIdMappings();
+        List<java.util.Map<String, String>> mappings = vehicleService.fetchAcNoMappings();
         return ResponseEntity.ok(ApiResponse.success("Vehicle ID mappings fetched", mappings));
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 📍 Fetch location details by vehicleId
-    // GET /api/vehicles/location?vehicleId=STICKER001
+    // 📍 Fetch location details by acNo
+    // GET /api/vehicles/location?acNo=101
     // Returns: full vehicle record with location, parkingAddress, statusComment, lastLocationUpdate
     // ─────────────────────────────────────────────────────────────
     @GetMapping("/location")
-    public ResponseEntity<ApiResponse<VehicleDetails>> fetchLocation(
-            @RequestParam String vehicleId) {
+    public ResponseEntity<ApiResponse<List<VehicleDetails>>> fetchLocation(
+            @RequestParam String acNo) {
         try {
-            VehicleDetails vehicle = vehicleService.fetchLocationByVehicleId(vehicleId);
-            return ResponseEntity.ok(ApiResponse.success("Location fetched", vehicle));
+            List<VehicleDetails> vehicles = vehicleService.fetchLocationByAcNo(acNo);
+            return ResponseEntity.ok(ApiResponse.success("Location fetched", vehicles));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error(e.getMessage()));
@@ -112,14 +112,14 @@ public class VehicleController {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ✏️ Update location details by vehicleId
-    // PUT /api/vehicles/location?vehicleId=STICKER001
+    // ✏️ Update location details by acNo
+    // PUT /api/vehicles/location?acNo=101
     // Body: { "location": {...}, "parkingAddress": "...", "statusComment": "..." }
     // Note: lastLocationUpdate is automatically set when location or parkingAddress changes
     // ─────────────────────────────────────────────────────────────
     @PutMapping("/location")
-    public ResponseEntity<ApiResponse<VehicleDetails>> updateLocation(
-            @RequestParam String vehicleId,
+    public ResponseEntity<ApiResponse<List<VehicleDetails>>> updateLocation(
+            @RequestParam String acNo,
             @RequestBody JsonNode payload) {
         try {
             VehicleDetails updated = new VehicleDetails();
@@ -149,7 +149,7 @@ public class VehicleController {
                 updated.setStatusComment(statusCommentNode.asText());
             }
 
-            VehicleDetails result = vehicleService.updateLocationByVehicleId(vehicleId, updated);
+            List<VehicleDetails> result = vehicleService.updateLocationByAcNo(acNo, updated);
             return ResponseEntity.ok(ApiResponse.success("Location updated", result));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
