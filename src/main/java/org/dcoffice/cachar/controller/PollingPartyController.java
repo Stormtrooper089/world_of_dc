@@ -95,41 +95,41 @@ public class PollingPartyController {
     // ─────────────────────────────────────────────────────────────
     // 📦 GET /api/polling-parties/materials?psName=...
     // ─────────────────────────────────────────────────────────────
-    @GetMapping("/materials")
-    public ResponseEntity<ApiResponse<java.util.List<Materials>>> getMaterials(
-            @RequestParam String psName) {
-        try {
-            java.util.List<Materials> materials = pollingPartyService.getMaterialsByPsName(psName);
-            return ResponseEntity.ok(ApiResponse.success("Materials fetched successfully", materials));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            logger.error("Failed to fetch materials for psName {}: {}", psName, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to fetch materials: " + e.getMessage()));
-        }
-    }
+//    @GetMapping("/materials")
+//    public ResponseEntity<ApiResponse<java.util.List<Materials>>> getMaterials(
+//            @RequestParam String psName) {
+//        try {
+//            java.util.List<Materials> materials = pollingPartyService.getMaterialsByPsName(psName);
+//            return ResponseEntity.ok(ApiResponse.success("Materials fetched successfully", materials));
+//        } catch (RuntimeException e) {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+//                    .body(ApiResponse.error(e.getMessage()));
+//        } catch (Exception e) {
+//            logger.error("Failed to fetch materials for psName {}: {}", psName, e.getMessage());
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                    .body(ApiResponse.error("Failed to fetch materials: " + e.getMessage()));
+//        }
+//    }
 
     // ─────────────────────────────────────────────────────────────
     // ✏️ PUT /api/polling-parties/materials?psName=...
     // ─────────────────────────────────────────────────────────────
-    @PutMapping("/materials")
-    public ResponseEntity<ApiResponse<java.util.List<Materials>>> updateMaterials(
-            @RequestParam String psName,
-            @RequestBody Materials materials) {
-        try {
-            java.util.List<Materials> updated = pollingPartyService.updateMaterialsByPsName(psName, materials);
-            return ResponseEntity.ok(ApiResponse.success("Materials updated successfully", updated));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            logger.error("Failed to update materials for psName {}: {}", psName, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to update materials: " + e.getMessage()));
-        }
-    }
+//    @PutMapping("/materials")
+//    public ResponseEntity<ApiResponse<java.util.List<Materials>>> updateMaterials(
+//            @RequestParam String psName,
+//            @RequestBody Materials materials) {
+//        try {
+//            java.util.List<Materials> updated = pollingPartyService.updateMaterialsByPsName(psName, materials);
+//            return ResponseEntity.ok(ApiResponse.success("Materials updated successfully", updated));
+//        } catch (RuntimeException e) {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+//                    .body(ApiResponse.error(e.getMessage()));
+//        } catch (Exception e) {
+//            logger.error("Failed to update materials for psName {}: {}", psName, e.getMessage());
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                    .body(ApiResponse.error("Failed to update materials: " + e.getMessage()));
+//        }
+//    }
 
     // ─────────────────────────────────────────────────────────────
     // 👥 GET /api/polling-parties/members?psName=...

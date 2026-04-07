@@ -9,5 +9,6 @@ public interface PollingPartyRepository extends MongoRepository<PollingParty, St
 
     // ✅ NOW ONLY PS-BASED
     Optional<PollingParty> findByPsNo(String psNo);
-    java.util.List<PollingParty> findByPsName(String psName);
+   java.util.List<PollingParty> findByPsName(String psName);
+   Optional<PollingParty> findByPsNameIgnoreCase(String psName);
 }

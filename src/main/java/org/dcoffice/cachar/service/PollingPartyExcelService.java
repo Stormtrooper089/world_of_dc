@@ -33,15 +33,13 @@ public class PollingPartyExcelService {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
-                String psNo = get(row, headerMap, "POLLING STATION NO");
-                String psName = get(row, headerMap, "POLLING STATION NAME");
 
-                if (psNo.isBlank()) continue;
+                String psName = normalizePsName(get(row, headerMap, "POLLING STATION NAME"));
 
-                PollingParty party = repository.findByPsNo(psNo)
+                if (psName.isBlank()) continue;
+                PollingParty party = repository.findByPsNameIgnoreCase(psName)
                         .orElseGet(() -> {
                             PollingParty p = new PollingParty();
-                            p.setPsNo(psNo);
                             p.setPsName(psName);
                             p.setMembers(new ArrayList<>());
                             return p;
@@ -56,9 +54,9 @@ public class PollingPartyExcelService {
 
                     Member member = new Member(
                             normalizeRole(duty),
-                            name,
-                            mobile,
-                            groupCode
+                            name.trim(),
+                            mobile.trim(),
+                            groupCode.trim()
                     );
 
                     if (!alreadyExists(party.getMembers(), member)) {
@@ -85,15 +83,13 @@ public class PollingPartyExcelService {
 
             String header = formatter.formatCellValue(cell)
                     .trim()
-                    .replaceAll("\\s+", " ")   // normalize spaces
+                    .replaceAll("\\s+", " ")
                     .toUpperCase();
 
             map.put(header, cell.getColumnIndex());
         }
 
-        // ✅ STRICT VALIDATION
         List<String> requiredHeaders = Arrays.asList(
-                "POLLING STATION NO",
                 "POLLING STATION NAME",
                 "POLLING OFFICER",
                 "DUTY"
@@ -144,5 +140,16 @@ public class PollingPartyExcelService {
         if (duty.contains("reserve")) return "RESERVE_OFFICER";
 
         return duty.toUpperCase();
+    }
+
+    // ================= PS NAME NORMALIZATION (CRITICAL) =================
+
+    private String normalizePsName(String psName) {
+
+        return psName
+                .toUpperCase()
+                .replaceAll("\\s+", " ")
+                .replaceAll("\\(.*?\\)", "") // remove room variations
+                .trim();
     }
 }
