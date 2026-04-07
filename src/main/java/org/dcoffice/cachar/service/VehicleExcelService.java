@@ -32,23 +32,27 @@ public class VehicleExcelService {
 
                 VehicleDetails v = new VehicleDetails();
 
+                // 🆔 AC NO (Code column - keep as-is)
+                v.setAcNo(get(row, 1));
+
                 // 🚗 Vehicle fields
                 v.setVehicleType(get(row, 2));
                 v.setVehicleNo(get(row, 3));
 
                 // 👤 Driver parsing
-                String driverField = get(row, 4);
-                extractDriverDetails(driverField, v);
+                extractDriverDetails(get(row, 4), v);
 
-                // 🏫 PS parsing (from route column)
-                String psField = get(row, 5);
-                extractPsDetails(psField, v);
+                // 🏫 PS fields (now separate columns)
+                String psNo = get(row, 5);
+                String psName = get(row, 6);
 
-                // 🛣️ Store full route as well
-                v.setRoute(psField);
+                v.setPsNo(cleanPsNo(psNo));
+                v.setPsName(psName.trim());
 
-                // ⚠️ Fields not present in new Excel
-                v.setAcNo("");
+                // 🛣️ Route (optional combined field)
+                v.setRoute("PS-" + v.getPsNo() + " " + v.getPsName());
+
+                // ⚠️ Defaults
                 v.setRemarks("");
                 v.setCapacity(0);
 
@@ -60,7 +64,7 @@ public class VehicleExcelService {
             repository.saveAll(list);
 
         } catch (Exception e) {
-            throw new RuntimeException("Vehicle Excel upload failed: " + e.getMessage());
+            throw new RuntimeException("Vehicle Excel upload failed: " + e.getMessage(), e);
         }
     }
 
@@ -78,10 +82,10 @@ public class VehicleExcelService {
         driverField = driverField.trim();
 
         try {
-            // 🔹 Normalize (replace newline, tabs with space)
+            // Normalize (handle multiline cells)
             driverField = driverField.replaceAll("[\\n\\r\\t]+", " ").trim();
 
-            // 🔹 Extract mobile (10-digit number)
+            // Extract mobile (10-digit number)
             String mobile = "";
             java.util.regex.Matcher matcher = java.util.regex.Pattern
                     .compile("\\b\\d{10}\\b")
@@ -91,8 +95,10 @@ public class VehicleExcelService {
                 mobile = matcher.group();
             }
 
-            // 🔹 Remove mobile from string to get name
-            String name = driverField.replace(mobile, "").replace("-", "").trim();
+            // Remove mobile to get name
+            String name = driverField.replace(mobile, "")
+                    .replace("-", "")
+                    .trim();
 
             v.setDriverName(name);
             v.setDriverMobile(mobile);
@@ -104,37 +110,19 @@ public class VehicleExcelService {
     }
 
     // =========================
-    // 🔧 PS PARSER
+    // 🔧 CLEAN PS NO
     // =========================
-    private void extractPsDetails(String psField, VehicleDetails v) {
+    private String cleanPsNo(String psNo) {
 
-        if (psField == null || psField.trim().isEmpty()) {
-            v.setPsNo("");
-            v.setPsName("");
-            return;
-        }
+        if (psNo == null || psNo.trim().isEmpty()) return "";
 
-        psField = psField.trim();
+        // Extract only digits
+        String cleaned = psNo.replaceAll("[^0-9]", "");
 
-        try {
-            // Remove "PS No." prefix if present
-            if (psField.toLowerCase().startsWith("ps no.")) {
-                psField = psField.substring(6).trim();
-            }
+        if (cleaned.isEmpty()) return "";
 
-            // Split into PS No and Name
-            String[] parts = psField.split(" - ", 2);
-
-            String psNo = parts.length > 0 ? parts[0].trim() : "";
-            String psName = parts.length > 1 ? parts[1].trim() : "";
-
-            v.setPsNo(psNo);
-            v.setPsName(psName);
-
-        } catch (Exception e) {
-            v.setPsNo("");
-            v.setPsName(psField);
-        }
+        // Pad to 3 digits (001, 002, ...)
+        return String.format("%03d", Integer.parseInt(cleaned));
     }
 
     // =========================
@@ -146,8 +134,11 @@ public class VehicleExcelService {
         if (cell == null) return "";
 
         switch (cell.getCellType()) {
+
             case STRING:
-                return cell.getStringCellValue().trim();
+                return cell.getStringCellValue()
+                        .replace("\r", "")
+                        .trim();
 
             case NUMERIC:
                 return String.valueOf((long) cell.getNumericCellValue());
