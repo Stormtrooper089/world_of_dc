@@ -17,6 +17,7 @@ public class CreateTrackingMemberRequest {
     private String address;
     private Double latitude;
     private Double longitude;
+    private Boolean admin;
 
     public String getId() {
         return id;
@@ -88,5 +89,13 @@ public class CreateTrackingMemberRequest {
 
     public void setLongitude(Double longitude) {
         this.longitude = longitude;
+    }
+
+    public Boolean getAdmin() {
+        return admin;
+    }
+
+    public void setAdmin(Boolean admin) {
+        this.admin = admin;
     }
 }
