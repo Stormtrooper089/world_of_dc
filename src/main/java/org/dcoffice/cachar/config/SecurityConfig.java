@@ -52,6 +52,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // ===== PUBLIC ENDPOINTS =====
                 .antMatchers(HttpMethod.POST, "/auth/login").permitAll()
                 .antMatchers(HttpMethod.POST, "/auth/signup").permitAll()
+                .antMatchers(HttpMethod.POST, "/auth/send-otp").permitAll()
                 .antMatchers("/api/citizen/send-otp").permitAll()
                 .antMatchers("/api/citizen/verify-otp").permitAll()
                 .antMatchers("/api/citizen/register").permitAll()
