@@ -39,6 +39,9 @@ public class WorkerService {
     private static final Logger logger = LoggerFactory.getLogger(WorkerService.class);
     private static final List<String> ATTENDANCE_TYPES = Arrays.asList("LOGIN", "LOGOUT");
 
+    // Static OTP — replace with SMS provider integration when ready
+    private static final String STATIC_OTP = "24052026";
+
     @Autowired
     private TrackingMemberRepository trackingMemberRepository;
 
@@ -56,7 +59,24 @@ public class WorkerService {
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
-    public Map<String, Object> login(String mobile) {
+    /**
+     * Step 1: Send OTP to mobile.
+     * Currently a no-op — OTP is hardcoded as STATIC_OTP.
+     * Replace body with SMS provider call when ready.
+     */
+    public void sendOtp(String mobile) {
+        logger.info("OTP requested for mobile: {} (static OTP in use)", mobile);
+        // TODO: integrate SMS provider here
+    }
+
+    /**
+     * Step 2: Verify OTP then log in.
+     * Throws IllegalArgumentException if OTP is wrong.
+     */
+    public Map<String, Object> login(String mobile, String otp) {
+        if (!STATIC_OTP.equals(otp)) {
+            throw new IllegalArgumentException("INVALID_OTP");
+        }
         TrackingMember member = trackingMemberRepository.findByPhone(mobile)
                 .orElseThrow(() -> new NoSuchElementException("User not found"));
         String token = jwtService.generateTokenForWorker(member);

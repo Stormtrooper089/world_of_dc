@@ -26,11 +26,28 @@ public class WorkerAuthController {
     @Autowired
     private WorkerService workerService;
 
+    @PostMapping("/auth/send-otp")
+    public ResponseEntity<?> sendOtp(@RequestBody WorkerLoginRequest request) {
+        try {
+            workerService.sendOtp(request.getMobile());
+            Map<String, String> body = new HashMap<>();
+            body.put("message", "OTP sent successfully");
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            logger.error("Send OTP failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorBody(e.getMessage()));
+        }
+    }
+
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(@RequestBody WorkerLoginRequest request) {
         try {
-            Map<String, Object> result = workerService.login(request.getMobile());
+            Map<String, Object> result = workerService.login(request.getMobile(), request.getOtp());
             return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(errorBody(e.getMessage()));
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(errorBody("User not found"));
