@@ -186,6 +186,9 @@ public class TrackingService {
             member.setLocation(new GeoJsonPoint(request.getLongitude(), request.getLatitude()));
             member.setLastUpdate(Instant.now());
         }
+        if (request.getAdmin() != null) {
+            member.setAdmin(request.getAdmin());
+        }
 
         TrackingMember saved = trackingMemberRepository.save(member);
 
