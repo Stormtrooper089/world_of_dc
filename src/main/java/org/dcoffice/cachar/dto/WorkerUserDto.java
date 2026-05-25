@@ -9,6 +9,7 @@ public class WorkerUserDto {
     private String address;
     private String createdAt;
     private boolean admin;
+    private String squadId;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -28,4 +29,7 @@ public class WorkerUserDto {
     @JsonProperty("isAdmin")
     public boolean isAdmin() { return admin; }
     public void setAdmin(boolean admin) { this.admin = admin; }
+
+    public String getSquadId() { return squadId; }
+    public void setSquadId(String squadId) { this.squadId = squadId; }
 }

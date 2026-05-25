@@ -362,6 +362,7 @@ public class WorkerService {
         dto.setAddress(member.getAddress());
         dto.setCreatedAt(member.getCreatedAt() != null ? member.getCreatedAt().toString() : null);
         dto.setAdmin(member.isAdmin());
+        dto.setSquadId(member.getSquadId());
         return dto;
     }
 
