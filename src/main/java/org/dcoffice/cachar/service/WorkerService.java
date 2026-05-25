@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -243,25 +242,43 @@ public class WorkerService {
 
     // ── Admin ─────────────────────────────────────────────────────────────────
 
-    public List<WorkerUserDto> getAllWorkers() {
-        return trackingMemberRepository.findAll(Sort.by(Sort.Direction.ASC, "name"))
-                .stream()
-                .map(this::toUserDto)
-                .collect(Collectors.toList());
+    /**
+     * Returns workers scoped to the supervisor's squad.
+     * If the supervisor has no squadId, returns all workers (global fallback).
+     */
+    public List<WorkerUserDto> getWorkers(String supervisorId) {
+        TrackingMember supervisor = requireMember(supervisorId);
+        String squadId = supervisor.getSquadId();
+
+        List<TrackingMember> members = (squadId != null && !squadId.isEmpty())
+                ? trackingMemberRepository.findBySquadIdOrderByNameAsc(squadId)
+                : trackingMemberRepository.findAllByOrderByNameAsc();
+
+        return members.stream().map(this::toUserDto).collect(Collectors.toList());
     }
 
-    public List<AdminWorkerSummaryDto> getAllTodayAttendance() {
-        Instant[] range = todayRange();
-        List<TrackingActivity> allActivities = trackingActivityRepository
-                .findByTypeInAndTimestampBetween(ATTENDANCE_TYPES, range[0], range[1]);
+    /**
+     * Returns today's attendance scoped to the supervisor's squad.
+     * If the supervisor has no squadId, returns all workers (global fallback).
+     */
+    public List<AdminWorkerSummaryDto> getSquadTodayAttendance(String supervisorId) {
+        TrackingMember supervisor = requireMember(supervisorId);
+        String squadId = supervisor.getSquadId();
 
-        Map<String, List<TrackingActivity>> byMember = allActivities.stream()
+        Instant[] range = todayRange();
+        List<TrackingActivity> activities = (squadId != null && !squadId.isEmpty())
+                ? trackingActivityRepository.findBySquadIdAndTypeInAndTimestampBetween(squadId, ATTENDANCE_TYPES, range[0], range[1])
+                : trackingActivityRepository.findByTypeInAndTimestampBetween(ATTENDANCE_TYPES, range[0], range[1]);
+
+        Map<String, List<TrackingActivity>> byMember = activities.stream()
                 .collect(Collectors.groupingBy(TrackingActivity::getMemberId));
 
-        List<TrackingMember> allMembers = trackingMemberRepository.findAll(Sort.by(Sort.Direction.ASC, "name"));
-        List<AdminWorkerSummaryDto> result = new ArrayList<>();
+        List<TrackingMember> squadMembers = (squadId != null && !squadId.isEmpty())
+                ? trackingMemberRepository.findBySquadIdOrderByNameAsc(squadId)
+                : trackingMemberRepository.findAllByOrderByNameAsc();
 
-        for (TrackingMember member : allMembers) {
+        List<AdminWorkerSummaryDto> result = new ArrayList<>();
+        for (TrackingMember member : squadMembers) {
             List<TrackingActivity> acts = byMember.getOrDefault(member.getId(), Collections.emptyList());
             AttendanceRecordDto attendance = acts.isEmpty() ? null : buildAttendanceRecord(member.getId(), acts);
             AdminWorkerSummaryDto summary = new AdminWorkerSummaryDto();
@@ -270,6 +287,13 @@ public class WorkerService {
             result.add(summary);
         }
         return result;
+    }
+
+    /** Sets or clears the admin (supervisor) flag on a member. */
+    public WorkerUserDto setSupervisor(String memberId, boolean isSupervisor) {
+        TrackingMember member = requireMember(memberId);
+        member.setAdmin(isSupervisor);
+        return toUserDto(trackingMemberRepository.save(member));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
