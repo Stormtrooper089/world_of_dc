@@ -30,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tracking")
@@ -40,6 +41,18 @@ public class TrackingController {
 
     @Autowired
     private TrackingService trackingService;
+
+    @PostMapping("/test/seed")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> seedTestData() {
+        try {
+            Map<String, Object> result = trackingService.seedTestData();
+            return ResponseEntity.ok(ApiResponse.success("Test data seeded successfully", result));
+        } catch (Exception e) {
+            logger.error("Failed to seed test data: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Failed to seed test data: " + e.getMessage()));
+        }
+    }
 
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<TrackingDashboardResponseDto>> getDashboard(
