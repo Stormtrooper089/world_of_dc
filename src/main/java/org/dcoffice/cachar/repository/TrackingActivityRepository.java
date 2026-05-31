@@ -35,4 +35,10 @@ public interface TrackingActivityRepository extends MongoRepository<TrackingActi
 
     List<TrackingActivity> findBySquadIdAndTypeInAndTimestampBetween(
             String squadId, List<String> types, Instant start, Instant end);
+
+    List<TrackingActivity> findBySquadIdAndTypeAndTimestampBetweenOrderByTimestampDesc(
+            String squadId, String type, Instant start, Instant end);
+
+    List<TrackingActivity> findByTypeAndTimestampBetweenOrderByTimestampDesc(
+            String type, Instant start, Instant end);
 }
