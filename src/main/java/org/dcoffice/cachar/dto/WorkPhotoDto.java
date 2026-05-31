@@ -3,6 +3,7 @@ package org.dcoffice.cachar.dto;
 public class WorkPhotoDto {
     private String id;
     private String userId;
+    private String memberName;
     private String imageUri;
     private String notes;
     private LocationCoordsDto location;
@@ -13,6 +14,9 @@ public class WorkPhotoDto {
 
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
+
+    public String getMemberName() { return memberName; }
+    public void setMemberName(String memberName) { this.memberName = memberName; }
 
     public String getImageUri() { return imageUri; }
     public void setImageUri(String imageUri) { this.imageUri = imageUri; }

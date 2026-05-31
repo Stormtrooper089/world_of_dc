@@ -1,6 +1,7 @@
 package org.dcoffice.cachar.controller;
 
 import org.dcoffice.cachar.dto.AdminWorkerSummaryDto;
+import org.dcoffice.cachar.dto.WorkPhotoDto;
 import org.dcoffice.cachar.dto.WorkerUserDto;
 import org.dcoffice.cachar.service.WorkerService;
 import org.slf4j.Logger;
@@ -55,6 +56,21 @@ public class WorkerAdminController {
             return ResponseEntity.ok(summary);
         } catch (Exception e) {
             logger.error("Get today attendance summary failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(e.getMessage()));
+        }
+    }
+
+    /** Returns all work photos uploaded by the caller's squad today. */
+    @GetMapping("/admin/photos/today")
+    public ResponseEntity<?> getSquadTodayPhotos(Authentication authentication) {
+        if (!isWorkerAdmin(authentication)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorBody("Forbidden"));
+        }
+        try {
+            List<WorkPhotoDto> photos = workerService.getSquadTodayPhotos(authentication.getName());
+            return ResponseEntity.ok(photos);
+        } catch (Exception e) {
+            logger.error("Get squad today photos failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(e.getMessage()));
         }
     }

@@ -366,10 +366,23 @@ public class WorkerService {
         return dto;
     }
 
+    public List<WorkPhotoDto> getSquadTodayPhotos(String supervisorId) {
+        TrackingMember supervisor = requireMember(supervisorId);
+        String squadId = supervisor.getSquadId();
+        Instant[] range = todayRange();
+
+        List<TrackingActivity> activities = (squadId != null && !squadId.isEmpty())
+                ? trackingActivityRepository.findBySquadIdAndTypeAndTimestampBetweenOrderByTimestampDesc(squadId, "PHOTO", range[0], range[1])
+                : trackingActivityRepository.findByTypeAndTimestampBetweenOrderByTimestampDesc("PHOTO", range[0], range[1]);
+
+        return activities.stream().map(this::toWorkPhotoDto).collect(Collectors.toList());
+    }
+
     private WorkPhotoDto toWorkPhotoDto(TrackingActivity activity) {
         WorkPhotoDto dto = new WorkPhotoDto();
         dto.setId(activity.getId());
         dto.setUserId(activity.getMemberId());
+        dto.setMemberName(activity.getMemberName());
         dto.setNotes(activity.getNotes());
         dto.setUploadedAt(activity.getTimestamp() != null ? activity.getTimestamp().toString() : null);
 
