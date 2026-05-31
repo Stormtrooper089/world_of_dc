@@ -83,6 +83,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/actuator/info").permitAll()
                 .antMatchers("/h2-console/**").permitAll()
                 .antMatchers("/css/**", "/js/**", "/images/**", "/favicon.ico").permitAll()
+                .antMatchers("/privacy-policy.html").permitAll()
                 .antMatchers(HttpMethod.POST, "/api/officer/signup").permitAll()
                 .antMatchers(HttpMethod.POST, "/api/officer/login").permitAll()
                 // Vehicle APIs - all public
