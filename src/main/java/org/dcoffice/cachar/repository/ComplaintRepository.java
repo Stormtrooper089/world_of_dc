@@ -1,6 +1,7 @@
 package org.dcoffice.cachar.repository;
 
 import org.dcoffice.cachar.entity.Complaint;
+import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.ComplaintStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
@@ -25,6 +26,10 @@ public interface ComplaintRepository extends MongoRepository<Complaint, String> 
 
     List<Complaint> findByStatus(ComplaintStatus status);
 
+    List<Complaint> findByCategory(ComplaintCategory category);
+
+    List<Complaint> findByWardNumber(Integer wardNumber);
+
     @Query("{ 'assignedToId': null, 'status': 'CREATED' }")
     List<Complaint> findUnassignedComplaints();
 
@@ -36,6 +41,9 @@ public interface ComplaintRepository extends MongoRepository<Complaint, String> 
 
     @Query("{ 'createdAt': { $gte: ?0 } }")
     List<Complaint> findRecentComplaints(LocalDateTime date);
+
+    @Query("{ 'slaDueAt': { $lt: ?0 }, 'status': { $nin: ['CLOSED', 'RESOLVED', 'REJECTED', 'DUPLICATE'] } }")
+    List<Complaint> findSlaOverdueComplaints(LocalDateTime now);
 
     @Query("{ 'status': { $in: ?0 } }")
     List<Complaint> findByStatusIn(List<ComplaintStatus> statuses);

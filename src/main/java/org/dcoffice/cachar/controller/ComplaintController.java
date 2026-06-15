@@ -76,8 +76,12 @@ public class ComplaintController {
             @RequestParam(value = "mobileNumber", required = false) String mobileNumber,
             @RequestParam("subject") String subject,
             @RequestParam("description") String description,
+            @RequestParam(value = "category", required = false) String categoryStr,
             @RequestParam(value = "priority", required = false) String priorityStr,
             @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "latitude", required = false) Double latitude,
+            @RequestParam(value = "longitude", required = false) Double longitude,
+            @RequestParam(value = "wardNumber", required = false) Integer wardNumber,
             @RequestParam(value = "department", required = false) String departmentStr,
             @RequestParam(value = "files", required = false) List<MultipartFile> files,
             Authentication authentication) {
@@ -150,6 +154,14 @@ public class ComplaintController {
             complaint.setCitizenId(citizen.getId());
             complaint.setSubject(subject);
             complaint.setDescription(description);
+            if (categoryStr != null && !categoryStr.trim().isEmpty()) {
+                try {
+                    complaint.setCategory(ComplaintCategory.valueOf(categoryStr.trim()));
+                } catch (IllegalArgumentException e) {
+                    logger.warn("Invalid complaint category value: {}, using OTHER", categoryStr);
+                    complaint.setCategory(ComplaintCategory.OTHER);
+                }
+            }
             
             // Convert priority string to enum - only if provided (for officer complaints)
             // Citizen complaints don't have priority, default to MEDIUM
@@ -163,6 +175,9 @@ public class ComplaintController {
             }
             complaint.setPriority(priority);
             complaint.setLocation(location);
+            complaint.setLatitude(latitude);
+            complaint.setLongitude(longitude);
+            complaint.setWardNumber(wardNumber);
             
             // Convert department string to enum - only for officer complaints
             // Citizen complaints don't have department assignment
@@ -335,6 +350,9 @@ public class ComplaintController {
             @RequestParam(value = "officerId", required = false) String officerId,
             @RequestParam(value = "citizenId", required = false) String citizenId,
             @RequestParam(value = "status", required = false) ComplaintStatus status,
+            @RequestParam(value = "category", required = false) ComplaintCategory category,
+            @RequestParam(value = "wardNumber", required = false) Integer wardNumber,
+            @RequestParam(value = "slaOverdue", required = false, defaultValue = "false") boolean slaOverdue,
             @RequestParam(value = "createdBy", required = false) String createdBy,
             Authentication authentication) {
         try {
@@ -362,6 +380,12 @@ public class ComplaintController {
                     }
                 } else if (status != null) {
                     complaints = complaintService.getComplaintsByStatus(status);
+                } else if (category != null) {
+                    complaints = complaintService.getComplaintsByCategory(category);
+                } else if (wardNumber != null) {
+                    complaints = complaintService.getComplaintsByWard(wardNumber);
+                } else if (slaOverdue) {
+                    complaints = complaintService.getSlaOverdueComplaints();
                 } else {
                     complaints = complaintService.getAllComplaints();
                 }
@@ -396,6 +420,23 @@ public class ComplaintController {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
                             .body(ApiResponse.error("Access denied: You can only view complaints you created or are assigned to"));
                 }
+            }
+            if (status != null) {
+                complaints.removeIf(complaint -> complaint.getStatus() != status);
+            }
+            if (category != null) {
+                complaints.removeIf(complaint -> complaint.getCategory() != category);
+            }
+            if (wardNumber != null) {
+                complaints.removeIf(complaint -> !wardNumber.equals(complaint.getWardNumber()));
+            }
+            if (slaOverdue) {
+                LocalDateTime now = LocalDateTime.now();
+                complaints.removeIf(complaint ->
+                        complaint.getSlaDueAt() == null ||
+                        !complaint.getSlaDueAt().isBefore(now) ||
+                        complaint.getStatus().isResolved() ||
+                        complaint.getStatus().isFinal());
             }
             
             return ResponseEntity.ok(ApiResponse.success("Complaints retrieved successfully", complaints));

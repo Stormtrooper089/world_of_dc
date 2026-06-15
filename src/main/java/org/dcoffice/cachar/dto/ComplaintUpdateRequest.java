@@ -1,6 +1,7 @@
 package org.dcoffice.cachar.dto;
 
 import org.dcoffice.cachar.entity.ComplaintStatus;
+import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.Department;
 import org.dcoffice.cachar.entity.Priority;
 
@@ -21,6 +22,10 @@ public class ComplaintUpdateRequest {
     private String subject;
     private String description;
     private String location;
+    private Double latitude;
+    private Double longitude;
+    private Integer wardNumber;
+    private ComplaintCategory category;
     private Priority priority;
     private ComplaintStatus status;
     private Department assignedDepartment;
@@ -40,6 +45,18 @@ public class ComplaintUpdateRequest {
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
 
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+
+    public Integer getWardNumber() { return wardNumber; }
+    public void setWardNumber(Integer wardNumber) { this.wardNumber = wardNumber; }
+
+    public ComplaintCategory getCategory() { return category; }
+    public void setCategory(ComplaintCategory category) { this.category = category; }
+
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
 
@@ -56,4 +73,3 @@ public class ComplaintUpdateRequest {
     public String getAssignedToId() { return assignedToId; }
     public void setAssignedToId(String assignedToId) { this.assignedToId = assignedToId; }
 }
-

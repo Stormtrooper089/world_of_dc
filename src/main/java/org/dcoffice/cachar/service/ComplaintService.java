@@ -48,10 +48,14 @@ public class ComplaintService {
     @Autowired
     private ComplaintDocumentRepository complaintDocumentRepository;
 
+    @Autowired
+    private WardService wardService;
+
     public Complaint createComplaint(Complaint complaint, List<MultipartFile> files) {
         // Generate complaint number
         complaint.setComplaintNumber(generateComplaintNumber());
         complaint.setComplaintId(counterService.getNextSequence("complaintId"));
+        applyMunicipalMetadata(complaint);
         
         // Assign the creator as the assigned officer if createdById is set (officer creating complaint)
         if (complaint.getCreatedById() != null && !complaint.getCreatedById().isEmpty()) {
@@ -167,6 +171,18 @@ public class ComplaintService {
         return complaintRepository.findByStatus(status);
     }
 
+    public List<Complaint> getComplaintsByCategory(ComplaintCategory category) {
+        return complaintRepository.findByCategory(category);
+    }
+
+    public List<Complaint> getComplaintsByWard(Integer wardNumber) {
+        return complaintRepository.findByWardNumber(wardNumber);
+    }
+
+    public List<Complaint> getSlaOverdueComplaints() {
+        return complaintRepository.findSlaOverdueComplaints(LocalDateTime.now());
+    }
+
     public List<Complaint> getRecentComplaints(int days) {
         LocalDateTime fromDate = LocalDateTime.now().minusDays(days);
         return complaintRepository.findRecentComplaints(fromDate);
@@ -251,6 +267,19 @@ public class ComplaintService {
         if (request.getLocation() != null) {
             complaint.setLocation(request.getLocation());
         }
+        if (request.getLatitude() != null) {
+            complaint.setLatitude(request.getLatitude());
+        }
+        if (request.getLongitude() != null) {
+            complaint.setLongitude(request.getLongitude());
+        }
+        if (request.getWardNumber() != null) {
+            complaint.setWardNumber(request.getWardNumber());
+        }
+        if (request.getCategory() != null) {
+            complaint.setCategory(request.getCategory());
+            complaint.setSlaDueAt(calculateSlaDueAt(request.getCategory()));
+        }
         if (request.getPriority() != null) {
             complaint.setPriority(request.getPriority());
         }
@@ -283,6 +312,7 @@ public class ComplaintService {
                 previousOfficerId != null ? previousOfficerId : "unassigned", 
                 request.getAssignedToId());
         }
+        applyWardDetails(complaint);
         
         // Add to history
         String historyMessage = "Complaint updated";
@@ -342,6 +372,62 @@ public class ComplaintService {
         historyEntry.setTimestamp(LocalDateTime.now());
         
         complaint.getHistory().add(historyEntry);
+    }
+
+    private void applyMunicipalMetadata(Complaint complaint) {
+        if (complaint.getCategory() == null) {
+            complaint.setCategory(ComplaintCategory.OTHER);
+        }
+        if (complaint.getSlaDueAt() == null) {
+            complaint.setSlaDueAt(calculateSlaDueAt(complaint.getCategory()));
+        }
+        applyWardDetails(complaint);
+    }
+
+    private void applyWardDetails(Complaint complaint) {
+        if (complaint.getWardNumber() == null) {
+            return;
+        }
+        wardService.findByWardNumber(complaint.getWardNumber()).ifPresent(ward -> {
+            complaint.setWardName(ward.getName());
+            complaint.setZone(ward.getZone());
+            if (complaint.getLatitude() == null) {
+                complaint.setLatitude(ward.getCenterLatitude());
+            }
+            if (complaint.getLongitude() == null) {
+                complaint.setLongitude(ward.getCenterLongitude());
+            }
+        });
+    }
+
+    private LocalDateTime calculateSlaDueAt(ComplaintCategory category) {
+        int hours;
+        switch (category) {
+            case GARBAGE_NOT_COLLECTED:
+            case ILLEGAL_DUMPING:
+                hours = 12;
+                break;
+            case DRAIN_BLOCKAGE:
+            case WATER_LOGGING:
+            case STREET_LIGHT:
+                hours = 24;
+                break;
+            case ROAD_DAMAGE:
+            case PUBLIC_TOILET:
+            case STRAY_ANIMAL:
+                hours = 48;
+                break;
+            case TRADE_LICENSE:
+            case PROPERTY_TAX:
+            case BUILDING_PERMISSION:
+            case BIRTH_DEATH_CERTIFICATE:
+                hours = 120;
+                break;
+            default:
+                hours = 72;
+                break;
+        }
+        return LocalDateTime.now().plusHours(hours);
     }
 
     private String generateComplaintNumber() {

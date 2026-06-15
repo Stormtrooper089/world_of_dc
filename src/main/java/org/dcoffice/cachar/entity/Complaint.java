@@ -32,12 +32,28 @@ public class Complaint {
     @NotBlank(message = "Description is required")
     private String description;
 
+    @Indexed
+    private ComplaintCategory category = ComplaintCategory.OTHER;
+
     private Priority priority = Priority.MEDIUM;
 
     @Indexed
     private ComplaintStatus status = ComplaintStatus.CREATED;
 
     private String location;
+    private Double latitude;
+    private Double longitude;
+
+    @Indexed
+    private Integer wardNumber;
+    private String wardName;
+    private String zone;
+
+    @Indexed
+    private LocalDateTime slaDueAt;
+    private Boolean citizenConfirmedResolved;
+    private Integer citizenRating;
+    private String citizenFeedback;
 
     // Department assignment
     private Department assignedDepartment = Department.UNASSIGNED;
@@ -88,6 +104,9 @@ public class Complaint {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
+    public ComplaintCategory getCategory() { return category; }
+    public void setCategory(ComplaintCategory category) { this.category = category; }
+
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
     public Long getComplaintId() {
@@ -110,6 +129,33 @@ public class Complaint {
 
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
+
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+
+    public Integer getWardNumber() { return wardNumber; }
+    public void setWardNumber(Integer wardNumber) { this.wardNumber = wardNumber; }
+
+    public String getWardName() { return wardName; }
+    public void setWardName(String wardName) { this.wardName = wardName; }
+
+    public String getZone() { return zone; }
+    public void setZone(String zone) { this.zone = zone; }
+
+    public LocalDateTime getSlaDueAt() { return slaDueAt; }
+    public void setSlaDueAt(LocalDateTime slaDueAt) { this.slaDueAt = slaDueAt; }
+
+    public Boolean getCitizenConfirmedResolved() { return citizenConfirmedResolved; }
+    public void setCitizenConfirmedResolved(Boolean citizenConfirmedResolved) { this.citizenConfirmedResolved = citizenConfirmedResolved; }
+
+    public Integer getCitizenRating() { return citizenRating; }
+    public void setCitizenRating(Integer citizenRating) { this.citizenRating = citizenRating; }
+
+    public String getCitizenFeedback() { return citizenFeedback; }
+    public void setCitizenFeedback(String citizenFeedback) { this.citizenFeedback = citizenFeedback; }
 
     public String getAssignedToId() { return assignedToId; }
     public void setAssignedToId(String assignedToId) { this.assignedToId = assignedToId; }
