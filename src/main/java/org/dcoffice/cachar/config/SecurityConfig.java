@@ -60,6 +60,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers(HttpMethod.GET, "/api/citizen/carousel").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/citizen/portal-stats").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/complaints/track/**").permitAll()
+                .antMatchers("/api/waste-pickup/**").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/files/download/**").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/wards/**").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/tracking/**").permitAll()
