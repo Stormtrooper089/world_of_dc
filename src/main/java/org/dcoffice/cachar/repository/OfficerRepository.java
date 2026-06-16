@@ -2,6 +2,7 @@ package org.dcoffice.cachar.repository;
 
 import org.dcoffice.cachar.entity.Officer;
 import org.dcoffice.cachar.entity.OfficerRole;
+import org.dcoffice.cachar.entity.EmployeeCategory;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -26,6 +27,8 @@ public interface OfficerRepository extends MongoRepository<Officer, String> {
 
     @Query("{ 'department': ?0, 'isActive': true }")
     List<Officer> findByDepartmentAndIsActiveTrue(String department);
+
+    List<Officer> findByEmployeeCategoryAndIsActiveTrue(EmployeeCategory employeeCategory);
 
     List<Officer> findByRole(OfficerRole role);
 

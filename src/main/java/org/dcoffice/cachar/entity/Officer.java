@@ -31,6 +31,7 @@ public class Officer {
 
     private String designation;
     private String department;
+    private EmployeeCategory employeeCategory = EmployeeCategory.OTHER;
     private OfficerRole role;
 
     @JsonIgnore
@@ -74,6 +75,11 @@ public class Officer {
 
     public String getDepartment() { return department; }
     public void setDepartment(String department) { this.department = department; }
+
+    public EmployeeCategory getEmployeeCategory() { return employeeCategory; }
+    public void setEmployeeCategory(EmployeeCategory employeeCategory) {
+        this.employeeCategory = employeeCategory != null ? employeeCategory : EmployeeCategory.OTHER;
+    }
 
     public OfficerRole getRole() { return role; }
     public void setRole(OfficerRole role) { this.role = role; }

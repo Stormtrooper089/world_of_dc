@@ -1,5 +1,7 @@
 package org.dcoffice.cachar.dto;
 
+import org.dcoffice.cachar.entity.EmployeeCategory;
+
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
@@ -27,6 +29,8 @@ public class OfficerUpdateRequest {
     @NotBlank(message = "Department is required")
     @Size(min = 2, max = 100, message = "Department must be between 2 and 100 characters")
     private String department;
+
+    private EmployeeCategory employeeCategory;
     
     // Constructors
     public OfficerUpdateRequest() {}
@@ -78,5 +82,13 @@ public class OfficerUpdateRequest {
     
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    public EmployeeCategory getEmployeeCategory() {
+        return employeeCategory;
+    }
+
+    public void setEmployeeCategory(EmployeeCategory employeeCategory) {
+        this.employeeCategory = employeeCategory;
     }
 }

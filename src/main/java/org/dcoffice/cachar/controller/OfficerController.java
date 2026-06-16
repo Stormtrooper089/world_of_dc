@@ -140,13 +140,14 @@ public class OfficerController {
 
     @GetMapping("/list")
     public ResponseEntity<ApiResponse<List<Officer>>> getAllActiveOfficers(
-            @RequestParam(value = "search", required = false) String searchQuery) {
+            @RequestParam(value = "search", required = false) String searchQuery,
+            @RequestParam(value = "category", required = false) EmployeeCategory employeeCategory) {
         try {
             List<Officer> officers;
             if (searchQuery != null && !searchQuery.trim().isEmpty()) {
-                officers = officerService.searchOfficersByName(searchQuery);
+                officers = officerService.searchOfficersByName(searchQuery, employeeCategory);
             } else {
-                officers = officerService.findActiveOfficers();
+                officers = officerService.findActiveOfficers(employeeCategory);
             }
             return ResponseEntity.ok(ApiResponse.success("Active officers retrieved", officers));
         } catch (Exception e) {
@@ -179,6 +180,7 @@ public class OfficerController {
             data.put("email", officer.getEmail());
             data.put("employeeId", officer.getEmployeeId());
             data.put("role", officer.getRole() != null ? officer.getRole().name() : "OFFICER");
+            data.put("employeeCategory", officer.getEmployeeCategory() != null ? officer.getEmployeeCategory().name() : "OTHER");
             return ResponseEntity.ok(ApiResponse.success("Login successful", data));
         } catch (Exception e) {
             logger.warn("Officer login failed for {}: {}", request.getEmployeeId(), e.getMessage());
@@ -269,6 +271,9 @@ public class OfficerController {
             }
             if (request.getDepartment() != null && !request.getDepartment().trim().isEmpty()) {
                 existingOfficer.setDepartment(request.getDepartment().trim());
+            }
+            if (request.getEmployeeCategory() != null) {
+                existingOfficer.setEmployeeCategory(request.getEmployeeCategory());
             }
             
             Officer updatedOfficer = officerService.updateOfficer(existingOfficer);
