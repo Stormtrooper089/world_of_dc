@@ -7,8 +7,11 @@ public class GovernanceDashboardResponse {
     private Summary summary = new Summary();
     private List<WardPerformance> wardPerformance = new ArrayList<>();
     private List<CategoryPerformance> categoryPerformance = new ArrayList<>();
+    private List<DepartmentPerformance> departmentPerformance = new ArrayList<>();
+    private List<OfficerPerformance> officerPerformance = new ArrayList<>();
     private List<StatusBreakdown> statusBreakdown = new ArrayList<>();
     private List<PriorityItem> priorityItems = new ArrayList<>();
+    private List<PriorityItem> oldestPendingComplaints = new ArrayList<>();
 
     public Summary getSummary() { return summary; }
     public void setSummary(Summary summary) { this.summary = summary; }
@@ -19,22 +22,44 @@ public class GovernanceDashboardResponse {
     public List<CategoryPerformance> getCategoryPerformance() { return categoryPerformance; }
     public void setCategoryPerformance(List<CategoryPerformance> categoryPerformance) { this.categoryPerformance = categoryPerformance; }
 
+    public List<DepartmentPerformance> getDepartmentPerformance() { return departmentPerformance; }
+    public void setDepartmentPerformance(List<DepartmentPerformance> departmentPerformance) { this.departmentPerformance = departmentPerformance; }
+
+    public List<OfficerPerformance> getOfficerPerformance() { return officerPerformance; }
+    public void setOfficerPerformance(List<OfficerPerformance> officerPerformance) { this.officerPerformance = officerPerformance; }
+
     public List<StatusBreakdown> getStatusBreakdown() { return statusBreakdown; }
     public void setStatusBreakdown(List<StatusBreakdown> statusBreakdown) { this.statusBreakdown = statusBreakdown; }
 
     public List<PriorityItem> getPriorityItems() { return priorityItems; }
     public void setPriorityItems(List<PriorityItem> priorityItems) { this.priorityItems = priorityItems; }
 
+    public List<PriorityItem> getOldestPendingComplaints() { return oldestPendingComplaints; }
+    public void setOldestPendingComplaints(List<PriorityItem> oldestPendingComplaints) { this.oldestPendingComplaints = oldestPendingComplaints; }
+
     public static class Summary {
+        private boolean slaFilterApplied;
+        private Integer selectedSlaDays;
         private long totalComplaints;
         private long openComplaints;
+        private long pendingComplaints;
         private long resolvedComplaints;
+        private long rejectedComplaints;
+        private long escalatedComplaints;
         private long slaBreached;
         private long dueToday;
         private long geoTaggedComplaints;
         private double resolutionRate;
+        private double slaBreachPercentage;
         private double geoTagCoverage;
         private double averageCitizenRating;
+        private double averageResolutionDays;
+
+        public boolean isSlaFilterApplied() { return slaFilterApplied; }
+        public void setSlaFilterApplied(boolean slaFilterApplied) { this.slaFilterApplied = slaFilterApplied; }
+
+        public Integer getSelectedSlaDays() { return selectedSlaDays; }
+        public void setSelectedSlaDays(Integer selectedSlaDays) { this.selectedSlaDays = selectedSlaDays; }
 
         public long getTotalComplaints() { return totalComplaints; }
         public void setTotalComplaints(long totalComplaints) { this.totalComplaints = totalComplaints; }
@@ -42,8 +67,17 @@ public class GovernanceDashboardResponse {
         public long getOpenComplaints() { return openComplaints; }
         public void setOpenComplaints(long openComplaints) { this.openComplaints = openComplaints; }
 
+        public long getPendingComplaints() { return pendingComplaints; }
+        public void setPendingComplaints(long pendingComplaints) { this.pendingComplaints = pendingComplaints; }
+
         public long getResolvedComplaints() { return resolvedComplaints; }
         public void setResolvedComplaints(long resolvedComplaints) { this.resolvedComplaints = resolvedComplaints; }
+
+        public long getRejectedComplaints() { return rejectedComplaints; }
+        public void setRejectedComplaints(long rejectedComplaints) { this.rejectedComplaints = rejectedComplaints; }
+
+        public long getEscalatedComplaints() { return escalatedComplaints; }
+        public void setEscalatedComplaints(long escalatedComplaints) { this.escalatedComplaints = escalatedComplaints; }
 
         public long getSlaBreached() { return slaBreached; }
         public void setSlaBreached(long slaBreached) { this.slaBreached = slaBreached; }
@@ -57,11 +91,17 @@ public class GovernanceDashboardResponse {
         public double getResolutionRate() { return resolutionRate; }
         public void setResolutionRate(double resolutionRate) { this.resolutionRate = resolutionRate; }
 
+        public double getSlaBreachPercentage() { return slaBreachPercentage; }
+        public void setSlaBreachPercentage(double slaBreachPercentage) { this.slaBreachPercentage = slaBreachPercentage; }
+
         public double getGeoTagCoverage() { return geoTagCoverage; }
         public void setGeoTagCoverage(double geoTagCoverage) { this.geoTagCoverage = geoTagCoverage; }
 
         public double getAverageCitizenRating() { return averageCitizenRating; }
         public void setAverageCitizenRating(double averageCitizenRating) { this.averageCitizenRating = averageCitizenRating; }
+
+        public double getAverageResolutionDays() { return averageResolutionDays; }
+        public void setAverageResolutionDays(double averageResolutionDays) { this.averageResolutionDays = averageResolutionDays; }
     }
 
     public static class WardPerformance {
@@ -130,6 +170,56 @@ public class GovernanceDashboardResponse {
         public void setResolutionRate(double resolutionRate) { this.resolutionRate = resolutionRate; }
     }
 
+    public static class DepartmentPerformance {
+        private String department;
+        private String label;
+        private long totalComplaints;
+        private long openComplaints;
+        private long slaBreached;
+        private double resolutionRate;
+
+        public String getDepartment() { return department; }
+        public void setDepartment(String department) { this.department = department; }
+
+        public String getLabel() { return label; }
+        public void setLabel(String label) { this.label = label; }
+
+        public long getTotalComplaints() { return totalComplaints; }
+        public void setTotalComplaints(long totalComplaints) { this.totalComplaints = totalComplaints; }
+
+        public long getOpenComplaints() { return openComplaints; }
+        public void setOpenComplaints(long openComplaints) { this.openComplaints = openComplaints; }
+
+        public long getSlaBreached() { return slaBreached; }
+        public void setSlaBreached(long slaBreached) { this.slaBreached = slaBreached; }
+
+        public double getResolutionRate() { return resolutionRate; }
+        public void setResolutionRate(double resolutionRate) { this.resolutionRate = resolutionRate; }
+    }
+
+    public static class OfficerPerformance {
+        private String officerId;
+        private String label;
+        private long totalComplaints;
+        private long openComplaints;
+        private long slaBreached;
+
+        public String getOfficerId() { return officerId; }
+        public void setOfficerId(String officerId) { this.officerId = officerId; }
+
+        public String getLabel() { return label; }
+        public void setLabel(String label) { this.label = label; }
+
+        public long getTotalComplaints() { return totalComplaints; }
+        public void setTotalComplaints(long totalComplaints) { this.totalComplaints = totalComplaints; }
+
+        public long getOpenComplaints() { return openComplaints; }
+        public void setOpenComplaints(long openComplaints) { this.openComplaints = openComplaints; }
+
+        public long getSlaBreached() { return slaBreached; }
+        public void setSlaBreached(long slaBreached) { this.slaBreached = slaBreached; }
+    }
+
     public static class StatusBreakdown {
         private String status;
         private String label;
@@ -157,6 +247,7 @@ public class GovernanceDashboardResponse {
         private String location;
         private String slaDueAt;
         private boolean slaBreached;
+        private long ageDays;
 
         public String getId() { return id; }
         public void setId(String id) { this.id = id; }
@@ -190,5 +281,8 @@ public class GovernanceDashboardResponse {
 
         public boolean isSlaBreached() { return slaBreached; }
         public void setSlaBreached(boolean slaBreached) { this.slaBreached = slaBreached; }
+
+        public long getAgeDays() { return ageDays; }
+        public void setAgeDays(long ageDays) { this.ageDays = ageDays; }
     }
 }

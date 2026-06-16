@@ -22,12 +22,12 @@ public class GovernanceDashboardController {
 
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<GovernanceDashboardResponse>> getDashboard(
-            @RequestParam(value = "days", defaultValue = "30") int days
+            @RequestParam(value = "pendingAgeDays", required = false) Integer pendingAgeDays
     ) {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         "Governance dashboard retrieved successfully",
-                        governanceDashboardService.getDashboard(days)
+                        governanceDashboardService.getDashboard(pendingAgeDays)
                 )
         );
     }

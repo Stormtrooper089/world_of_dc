@@ -4,11 +4,13 @@ import org.dcoffice.cachar.dto.GovernanceDashboardResponse;
 import org.dcoffice.cachar.entity.Complaint;
 import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.ComplaintStatus;
+import org.dcoffice.cachar.entity.Department;
 import org.dcoffice.cachar.entity.Priority;
 import org.dcoffice.cachar.repository.ComplaintRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -25,32 +27,49 @@ public class GovernanceDashboardService {
         this.complaintRepository = complaintRepository;
     }
 
-    public GovernanceDashboardResponse getDashboard(int days) {
-        int safeDays = Math.max(1, Math.min(days, 365));
+    public GovernanceDashboardResponse getDashboard(Integer pendingAgeDays) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime since = now.minusDays(safeDays);
+        Integer safePendingAgeDays = pendingAgeDays == null ? null : Math.max(1, Math.min(pendingAgeDays, 3650));
+        boolean slaFilterApplied = safePendingAgeDays != null;
 
-        List<Complaint> complaints = complaintRepository.findAll().stream()
-                .filter(complaint -> complaint.getCreatedAt() == null || !complaint.getCreatedAt().isBefore(since))
+        List<Complaint> allComplaints = complaintRepository.findAll();
+        List<Complaint> complaints = allComplaints.stream()
+                .filter(complaint -> !slaFilterApplied || isPendingBeyondAge(complaint, now, safePendingAgeDays))
                 .collect(Collectors.toList());
 
         GovernanceDashboardResponse response = new GovernanceDashboardResponse();
-        response.setSummary(buildSummary(complaints, now));
+        response.setSummary(buildSummary(complaints, allComplaints, now, safePendingAgeDays));
         response.setWardPerformance(buildWardPerformance(complaints, now));
+        response.setDepartmentPerformance(buildDepartmentPerformance(complaints, now));
+        response.setOfficerPerformance(buildOfficerPerformance(complaints, now));
         response.setCategoryPerformance(buildCategoryPerformance(complaints, now));
         response.setStatusBreakdown(buildStatusBreakdown(complaints));
         response.setPriorityItems(buildPriorityItems(complaints, now));
+        response.setOldestPendingComplaints(buildOldestPendingComplaints(complaints, now));
         return response;
     }
 
-    private GovernanceDashboardResponse.Summary buildSummary(List<Complaint> complaints, LocalDateTime now) {
+    private GovernanceDashboardResponse.Summary buildSummary(
+            List<Complaint> complaints,
+            List<Complaint> allComplaints,
+            LocalDateTime now,
+            Integer selectedSlaDays
+    ) {
         GovernanceDashboardResponse.Summary summary = new GovernanceDashboardResponse.Summary();
         long total = complaints.size();
         long open = complaints.stream().filter(this::isOpen).count();
         long resolved = complaints.stream().filter(this::isResolved).count();
+        long rejected = complaints.stream().filter(complaint -> complaint.getStatus() == ComplaintStatus.REJECTED).count();
         long breached = complaints.stream().filter(complaint -> isSlaBreached(complaint, now)).count();
+        long escalated = complaints.stream().filter(complaint -> isEscalated(complaint, now)).count();
         long dueToday = complaints.stream().filter(complaint -> isDueToday(complaint, now)).count();
         long geoTagged = complaints.stream().filter(this::hasGeoTag).count();
+        double averageResolutionDays = complaints.stream()
+                .filter(this::isResolved)
+                .mapToLong(this::resolutionDays)
+                .filter(days -> days >= 0)
+                .average()
+                .orElse(0);
 
         double averageRating = complaints.stream()
                 .map(Complaint::getCitizenRating)
@@ -59,15 +78,23 @@ public class GovernanceDashboardService {
                 .average()
                 .orElse(0);
 
+        summary.setSlaFilterApplied(selectedSlaDays != null);
+        summary.setSelectedSlaDays(selectedSlaDays);
         summary.setTotalComplaints(total);
         summary.setOpenComplaints(open);
+        summary.setPendingComplaints(open);
         summary.setResolvedComplaints(resolved);
+        summary.setRejectedComplaints(rejected);
+        summary.setEscalatedComplaints(escalated);
         summary.setSlaBreached(breached);
         summary.setDueToday(dueToday);
         summary.setGeoTaggedComplaints(geoTagged);
         summary.setResolutionRate(percent(resolved, total));
+        long allPending = allComplaints.stream().filter(this::isOpen).count();
+        summary.setSlaBreachPercentage(selectedSlaDays == null ? percent(breached, open) : percent(total, allPending));
         summary.setGeoTagCoverage(percent(geoTagged, total));
         summary.setAverageCitizenRating(round(averageRating));
+        summary.setAverageResolutionDays(round(averageResolutionDays));
         return summary;
     }
 
@@ -142,6 +169,72 @@ public class GovernanceDashboardService {
                 .collect(Collectors.toList());
     }
 
+    private List<GovernanceDashboardResponse.DepartmentPerformance> buildDepartmentPerformance(
+            List<Complaint> complaints,
+            LocalDateTime now
+    ) {
+        Map<Department, List<Complaint>> byDepartment = complaints.stream()
+                .collect(Collectors.groupingBy(
+                        complaint -> complaint.getAssignedDepartment() == null ? Department.UNASSIGNED : complaint.getAssignedDepartment(),
+                        () -> new EnumMap<>(Department.class),
+                        Collectors.toList()
+                ));
+
+        return byDepartment.entrySet().stream()
+                .map(entry -> {
+                    List<Complaint> departmentComplaints = entry.getValue();
+                    long total = departmentComplaints.size();
+                    long resolved = departmentComplaints.stream().filter(this::isResolved).count();
+
+                    GovernanceDashboardResponse.DepartmentPerformance department = new GovernanceDashboardResponse.DepartmentPerformance();
+                    department.setDepartment(entry.getKey().name());
+                    department.setLabel(entry.getKey().getDisplayName());
+                    department.setTotalComplaints(total);
+                    department.setOpenComplaints(departmentComplaints.stream().filter(this::isOpen).count());
+                    department.setSlaBreached(departmentComplaints.stream().filter(complaint -> isSlaBreached(complaint, now)).count());
+                    department.setResolutionRate(percent(resolved, total));
+                    return department;
+                })
+                .sorted((left, right) -> {
+                    int openCompare = Long.compare(right.getOpenComplaints(), left.getOpenComplaints());
+                    if (openCompare != 0) return openCompare;
+                    return Long.compare(right.getSlaBreached(), left.getSlaBreached());
+                })
+                .limit(10)
+                .collect(Collectors.toList());
+    }
+
+    private List<GovernanceDashboardResponse.OfficerPerformance> buildOfficerPerformance(
+            List<Complaint> complaints,
+            LocalDateTime now
+    ) {
+        Map<String, List<Complaint>> byOfficer = complaints.stream()
+                .collect(Collectors.groupingBy(complaint -> {
+                    String officerId = complaint.getAssignedToId();
+                    return officerId == null || officerId.trim().isEmpty() ? "UNASSIGNED" : officerId;
+                }));
+
+        return byOfficer.entrySet().stream()
+                .map(entry -> {
+                    List<Complaint> officerComplaints = entry.getValue();
+
+                    GovernanceDashboardResponse.OfficerPerformance officer = new GovernanceDashboardResponse.OfficerPerformance();
+                    officer.setOfficerId("UNASSIGNED".equals(entry.getKey()) ? null : entry.getKey());
+                    officer.setLabel("UNASSIGNED".equals(entry.getKey()) ? "Unassigned" : entry.getKey());
+                    officer.setTotalComplaints(officerComplaints.size());
+                    officer.setOpenComplaints(officerComplaints.stream().filter(this::isOpen).count());
+                    officer.setSlaBreached(officerComplaints.stream().filter(complaint -> isSlaBreached(complaint, now)).count());
+                    return officer;
+                })
+                .sorted((left, right) -> {
+                    int openCompare = Long.compare(right.getOpenComplaints(), left.getOpenComplaints());
+                    if (openCompare != 0) return openCompare;
+                    return Long.compare(right.getSlaBreached(), left.getSlaBreached());
+                })
+                .limit(10)
+                .collect(Collectors.toList());
+    }
+
     private List<GovernanceDashboardResponse.StatusBreakdown> buildStatusBreakdown(List<Complaint> complaints) {
         Map<ComplaintStatus, Long> counts = complaints.stream()
                 .filter(complaint -> complaint.getStatus() != null)
@@ -172,6 +265,18 @@ public class GovernanceDashboardService {
                 .collect(Collectors.toList());
     }
 
+    private List<GovernanceDashboardResponse.PriorityItem> buildOldestPendingComplaints(
+            List<Complaint> complaints,
+            LocalDateTime now
+    ) {
+        return complaints.stream()
+                .filter(this::isOpen)
+                .sorted(Comparator.comparing(Complaint::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .limit(10)
+                .map(complaint -> toPriorityItem(complaint, now))
+                .collect(Collectors.toList());
+    }
+
     private GovernanceDashboardResponse.PriorityItem toPriorityItem(Complaint complaint, LocalDateTime now) {
         GovernanceDashboardResponse.PriorityItem item = new GovernanceDashboardResponse.PriorityItem();
         item.setId(complaint.getId());
@@ -185,6 +290,7 @@ public class GovernanceDashboardService {
         item.setLocation(complaint.getLocation());
         item.setSlaDueAt(complaint.getSlaDueAt() != null ? complaint.getSlaDueAt().toString() : null);
         item.setSlaBreached(isSlaBreached(complaint, now));
+        item.setAgeDays(complaintAgeDays(complaint, now));
         return item;
     }
 
@@ -211,6 +317,26 @@ public class GovernanceDashboardService {
 
     private boolean isSlaBreached(Complaint complaint, LocalDateTime now) {
         return isOpen(complaint) && complaint.getSlaDueAt() != null && complaint.getSlaDueAt().isBefore(now);
+    }
+
+    private boolean isEscalated(Complaint complaint, LocalDateTime now) {
+        return isOpen(complaint) && (complaint.getStatus() == ComplaintStatus.BLOCKED || isSlaBreached(complaint, now));
+    }
+
+    private boolean isPendingBeyondAge(Complaint complaint, LocalDateTime now, int selectedDays) {
+        return isOpen(complaint) && complaintAgeDays(complaint, now) >= selectedDays;
+    }
+
+    private long complaintAgeDays(Complaint complaint, LocalDateTime now) {
+        if (complaint.getCreatedAt() == null) return 0;
+        return Math.max(0, ChronoUnit.DAYS.between(complaint.getCreatedAt(), now));
+    }
+
+    private long resolutionDays(Complaint complaint) {
+        if (complaint.getCreatedAt() == null) return -1;
+        LocalDateTime resolvedAt = complaint.getClosedAt() != null ? complaint.getClosedAt() : complaint.getUpdatedAt();
+        if (resolvedAt == null) return -1;
+        return Math.max(0, ChronoUnit.DAYS.between(complaint.getCreatedAt(), resolvedAt));
     }
 
     private boolean isDueToday(Complaint complaint, LocalDateTime now) {
