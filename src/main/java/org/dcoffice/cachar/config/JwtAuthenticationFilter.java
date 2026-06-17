@@ -92,6 +92,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
 
         String path = request.getRequestURI();
+        String method = request.getMethod();
+        boolean isPublicCitizenEndpoint =
+                path.equals("/api/citizen/send-otp") ||
+                path.equals("/api/citizen/login") ||
+                path.equals("/api/citizen/verify-otp") ||
+                path.equals("/api/citizen/register") ||
+                path.equals("/api/citizen/carousel") ||
+                path.equals("/api/citizen/portal-stats") ||
+                ("GET".equalsIgnoreCase(method) && path.startsWith("/api/citizen/profile/"));
 
         // ✅ Skip JWT filter for public endpoints
         return path.startsWith("/api/vehicles") ||
@@ -99,7 +108,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.startsWith("/api/tracking") ||
                 path.startsWith("/api/waste-pickup") ||
                 path.startsWith("/auth") ||
-                path.startsWith("/api/citizen") ||
+                isPublicCitizenEndpoint ||
                 path.startsWith("/actuator") ||
                 path.startsWith("/h2-console");
     }
