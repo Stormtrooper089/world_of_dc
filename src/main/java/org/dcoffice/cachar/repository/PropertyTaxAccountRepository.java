@@ -12,5 +12,6 @@ public interface PropertyTaxAccountRepository extends MongoRepository<PropertyTa
     Optional<PropertyTaxAccount> findByHoldingNumber(String holdingNumber);
     List<PropertyTaxAccount> findByLinkedCitizenId(String linkedCitizenId);
     List<PropertyTaxAccount> findByWardNumber(Integer wardNumber);
+    List<PropertyTaxAccount> findByStatus(String status);
     long countByStatus(String status);
 }
