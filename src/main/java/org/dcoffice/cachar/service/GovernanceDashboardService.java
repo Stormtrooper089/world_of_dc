@@ -5,8 +5,10 @@ import org.dcoffice.cachar.entity.Complaint;
 import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.ComplaintStatus;
 import org.dcoffice.cachar.entity.Department;
+import org.dcoffice.cachar.entity.Officer;
 import org.dcoffice.cachar.entity.Priority;
 import org.dcoffice.cachar.repository.ComplaintRepository;
+import org.dcoffice.cachar.repository.OfficerRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -14,17 +16,21 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class GovernanceDashboardService {
     private final ComplaintRepository complaintRepository;
+    private final OfficerRepository officerRepository;
 
-    public GovernanceDashboardService(ComplaintRepository complaintRepository) {
+    public GovernanceDashboardService(ComplaintRepository complaintRepository, OfficerRepository officerRepository) {
         this.complaintRepository = complaintRepository;
+        this.officerRepository = officerRepository;
     }
 
     public GovernanceDashboardResponse getDashboard(Integer pendingAgeDays) {
@@ -213,6 +219,7 @@ public class GovernanceDashboardService {
                     String officerId = complaint.getAssignedToId();
                     return officerId == null || officerId.trim().isEmpty() ? "UNASSIGNED" : officerId;
                 }));
+        Map<String, Officer> officersById = loadOfficersByAssignmentId(byOfficer.keySet());
 
         return byOfficer.entrySet().stream()
                 .map(entry -> {
@@ -220,7 +227,7 @@ public class GovernanceDashboardService {
 
                     GovernanceDashboardResponse.OfficerPerformance officer = new GovernanceDashboardResponse.OfficerPerformance();
                     officer.setOfficerId("UNASSIGNED".equals(entry.getKey()) ? null : entry.getKey());
-                    officer.setLabel("UNASSIGNED".equals(entry.getKey()) ? "Unassigned" : entry.getKey());
+                    officer.setLabel(resolveOfficerLabel(entry.getKey(), officersById));
                     officer.setTotalComplaints(officerComplaints.size());
                     officer.setOpenComplaints(officerComplaints.stream().filter(this::isOpen).count());
                     officer.setSlaBreached(officerComplaints.stream().filter(complaint -> isSlaBreached(complaint, now)).count());
@@ -233,6 +240,43 @@ public class GovernanceDashboardService {
                 })
                 .limit(10)
                 .collect(Collectors.toList());
+    }
+
+    private Map<String, Officer> loadOfficersByAssignmentId(Set<String> assignmentIds) {
+        Set<String> concreteIds = assignmentIds.stream()
+                .filter(id -> id != null && !"UNASSIGNED".equals(id))
+                .collect(Collectors.toCollection(HashSet::new));
+
+        Map<String, Officer> officersById = new HashMap<>();
+        officerRepository.findAllById(concreteIds).forEach(officer -> officersById.put(officer.getId(), officer));
+
+        concreteIds.stream()
+                .filter(id -> !officersById.containsKey(id))
+                .forEach(id -> officerRepository.findByEmployeeId(id)
+                        .ifPresent(officer -> officersById.put(id, officer)));
+
+        return officersById;
+    }
+
+    private String resolveOfficerLabel(String assignmentId, Map<String, Officer> officersById) {
+        if ("UNASSIGNED".equals(assignmentId)) {
+            return "Unassigned";
+        }
+
+        Officer officer = officersById.get(assignmentId);
+        if (officer == null) {
+            return assignmentId;
+        }
+
+        String name = officer.getName();
+        String employeeId = officer.getEmployeeId();
+        if (name == null || name.trim().isEmpty()) {
+            return employeeId == null || employeeId.trim().isEmpty() ? assignmentId : employeeId;
+        }
+
+        return employeeId == null || employeeId.trim().isEmpty()
+                ? name
+                : name + " (" + employeeId + ")";
     }
 
     private List<GovernanceDashboardResponse.StatusBreakdown> buildStatusBreakdown(List<Complaint> complaints) {
