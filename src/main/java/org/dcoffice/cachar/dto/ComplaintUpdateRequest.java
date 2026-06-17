@@ -30,6 +30,7 @@ public class ComplaintUpdateRequest {
     private ComplaintStatus status;
     private Department assignedDepartment;
     private String departmentRemarks;
+    private String actionRemarks;
     private String assignedToId; // Officer ID to assign/reassign the complaint to
 
     // Getters and Setters
@@ -68,6 +69,9 @@ public class ComplaintUpdateRequest {
 
     public String getDepartmentRemarks() { return departmentRemarks; }
     public void setDepartmentRemarks(String departmentRemarks) { this.departmentRemarks = departmentRemarks; }
+
+    public String getActionRemarks() { return actionRemarks; }
+    public void setActionRemarks(String actionRemarks) { this.actionRemarks = actionRemarks; }
 
 
     public String getAssignedToId() { return assignedToId; }

@@ -246,6 +246,13 @@ public class ComplaintService {
      */
     public Complaint updateComplaint(ComplaintUpdateRequest request, String currentOfficerId, String currentRole) {
         Complaint complaint = getComplaintById(request.getComplaintId());
+        ComplaintStatus previousStatus = complaint.getStatus();
+        Department previousDepartment = complaint.getAssignedDepartment();
+        String previousOfficerId = complaint.getAssignedToId();
+        boolean statusChanged = false;
+        boolean departmentChanged = false;
+        boolean assignmentChanged = false;
+        String actionRemarks = normalizeText(request.getActionRemarks());
         
         // Check authorization - complaint creator or admin roles can update
         boolean isAdminRole = "ROLE_DISTRICT_COMMISSIONER".equals(currentRole) ||
@@ -284,14 +291,21 @@ public class ComplaintService {
             complaint.setPriority(request.getPriority());
         }
         if (request.getStatus() != null) {
-            ComplaintStatus previous = complaint.getStatus();
             ComplaintStatus next = request.getStatus();
-            if (!ComplaintStatus.isValidTransition(previous, next)) {
-                throw new IllegalArgumentException("Invalid status transition: " + previous + " -> " + next);
+            if (!ComplaintStatus.isValidTransition(previousStatus, next)) {
+                throw new IllegalArgumentException("Invalid status transition: " + previousStatus + " -> " + next);
+            }
+            statusChanged = !next.equals(previousStatus);
+            if (statusChanged && requiresOfficerRemark(next) && actionRemarks == null) {
+                throw new IllegalArgumentException("Officer remarks are required before marking a complaint as " + next.getDisplayName());
             }
             complaint.setStatus(next);
+            if (statusChanged && next.isResolved()) {
+                complaint.setClosedAt(LocalDateTime.now());
+            }
         }
         if (request.getAssignedDepartment() != null) {
+            departmentChanged = previousDepartment == null || !previousDepartment.equals(request.getAssignedDepartment());
             complaint.setAssignedDepartment(request.getAssignedDepartment());
         }
         if (request.getDepartmentRemarks() != null) {
@@ -303,10 +317,12 @@ public class ComplaintService {
             if (officer == null || !officer.isApproved()) {
                 throw new IllegalArgumentException("Invalid or unapproved officer ID: " + request.getAssignedToId());
             }
-            String previousOfficerId = complaint.getAssignedToId();
-            complaint.setAssignedToId(request.getAssignedToId());
-            complaint.setAssignedById(currentOfficerId);
-            complaint.setAssignedAt(LocalDateTime.now());
+            assignmentChanged = previousOfficerId == null || !previousOfficerId.equals(request.getAssignedToId());
+            if (assignmentChanged) {
+                complaint.setAssignedToId(request.getAssignedToId());
+                complaint.setAssignedById(currentOfficerId);
+                complaint.setAssignedAt(LocalDateTime.now());
+            }
             logger.info("Complaint {} reassigned from {} to {}", 
                 complaint.getComplaintNumber(), 
                 previousOfficerId != null ? previousOfficerId : "unassigned", 
@@ -314,16 +330,18 @@ public class ComplaintService {
         }
         applyWardDetails(complaint);
         
-        // Add to history
-        String historyMessage = "Complaint updated";
-        if (request.getAssignedDepartment() != null) {
+        String historyMessage = buildHistoryMessage(request, statusChanged, assignmentChanged);
+        if (departmentChanged) {
             historyMessage += " and assigned to " + request.getAssignedDepartment().getDisplayName();
         }
-        if (request.getAssignedToId() != null && !request.getAssignedToId().trim().isEmpty()) {
+        if (assignmentChanged) {
             historyMessage += " and officer reassigned";
         }
-        addToHistory(complaint, historyMessage, null, currentOfficerId);
-        
+        String citizenVisibleRemarks = actionRemarks != null ? actionRemarks : historyMessage;
+        Officer actor = resolveOfficerForHistory(currentOfficerId);
+        complaintHistoryService.createHistoryEntry(complaint, actor, previousStatus, complaint.getStatus(), citizenVisibleRemarks);
+        addToHistory(complaint, historyMessage, citizenVisibleRemarks, currentOfficerId);
+
         return complaintRepository.save(complaint);
     }
     
@@ -367,11 +385,52 @@ public class ComplaintService {
         }
         historyEntry.setPreviousStatus(previous);
         historyEntry.setNewStatus(complaint.getStatus());
-        historyEntry.setRemarks(action + ": " + remarks);
+        historyEntry.setRemarks(remarks == null || remarks.trim().isEmpty() ? action : action + ": " + remarks);
         historyEntry.setOfficerId(updatedBy);
         historyEntry.setTimestamp(LocalDateTime.now());
         
         complaint.getHistory().add(historyEntry);
+    }
+
+    private boolean requiresOfficerRemark(ComplaintStatus status) {
+        return status == ComplaintStatus.RESOLVED
+                || status == ComplaintStatus.CLOSED
+                || status == ComplaintStatus.REJECTED;
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String buildHistoryMessage(ComplaintUpdateRequest request, boolean statusChanged, boolean assignmentChanged) {
+        if (statusChanged && request.getStatus() == ComplaintStatus.IN_PROGRESS) {
+            return "Work is in progress";
+        }
+        if (statusChanged && request.getStatus() != null && request.getStatus().isResolved()) {
+            return "Complaint closure updated";
+        }
+        if (statusChanged && request.getStatus() != null) {
+            return "Status updated to " + request.getStatus().getDisplayName();
+        }
+        if (assignmentChanged) {
+            return "Complaint reassigned";
+        }
+        return "Complaint updated";
+    }
+
+    private Officer resolveOfficerForHistory(String officerId) {
+        try {
+            return officerService.getOfficerById(officerId);
+        } catch (Exception ignored) {
+            Officer fallback = new Officer();
+            fallback.setId(officerId);
+            fallback.setName("SMC Officer");
+            return fallback;
+        }
     }
 
     private void applyMunicipalMetadata(Complaint complaint) {
