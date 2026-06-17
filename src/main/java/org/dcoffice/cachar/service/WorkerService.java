@@ -20,7 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,6 +37,7 @@ public class WorkerService {
 
     private static final Logger logger = LoggerFactory.getLogger(WorkerService.class);
     private static final List<String> ATTENDANCE_TYPES = Arrays.asList("LOGIN", "LOGOUT");
+    private static final ZoneId MUNICIPAL_ZONE = ZoneId.of("Asia/Kolkata");
 
     // Static OTP — replace with SMS provider integration when ready
     private static final String STATIC_OTP = "24052026";
@@ -190,10 +191,10 @@ public class WorkerService {
         List<TrackingActivity> all = trackingActivityRepository
                 .findByMemberIdAndTypeInOrderByTimestampDesc(userId, ATTENDANCE_TYPES);
 
-        // Group by date (UTC) preserving order (newest first)
+        // Group by SMC local date preserving order (newest first)
         Map<String, List<TrackingActivity>> byDate = new LinkedHashMap<>();
         for (TrackingActivity a : all) {
-            String date = a.getTimestamp().atZone(ZoneOffset.UTC).toLocalDate().toString();
+            String date = a.getTimestamp().atZone(MUNICIPAL_ZONE).toLocalDate().toString();
             byDate.computeIfAbsent(date, k -> new ArrayList<>()).add(a);
         }
 
@@ -220,7 +221,7 @@ public class WorkerService {
         activity.setMemberName(member.getName());
         activity.setSquadId(member.getSquadId());
         activity.setType("PHOTO");
-        activity.setStatus(member.getStatus());
+        activity.setStatus(resolveCurrentAttendanceStatus(member));
         activity.setLatitude(latitude);
         activity.setLongitude(longitude);
         activity.setAccuracy(accuracy);
@@ -304,10 +305,10 @@ public class WorkerService {
     }
 
     private Instant[] todayRange() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = LocalDate.now(MUNICIPAL_ZONE);
         return new Instant[]{
-                today.atStartOfDay(ZoneOffset.UTC).toInstant(),
-                today.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+                today.atStartOfDay(MUNICIPAL_ZONE).toInstant(),
+                today.plusDays(1).atStartOfDay(MUNICIPAL_ZONE).toInstant()
         };
     }
 
@@ -318,7 +319,7 @@ public class WorkerService {
                 .filter(a -> "LOGOUT".equals(a.getType())).findFirst().orElse(null);
 
         TrackingActivity reference = login != null ? login : logout;
-        String date = reference.getTimestamp().atZone(ZoneOffset.UTC).toLocalDate().toString();
+        String date = reference.getTimestamp().atZone(MUNICIPAL_ZONE).toLocalDate().toString();
 
         AttendanceRecordDto dto = new AttendanceRecordDto();
         dto.setId(userId + "_" + date);
@@ -338,6 +339,19 @@ public class WorkerService {
             }
         }
         return dto;
+    }
+
+    private String resolveCurrentAttendanceStatus(TrackingMember member) {
+        Instant[] range = todayRange();
+        List<TrackingActivity> todayAttendance = trackingActivityRepository
+                .findByMemberIdAndTypeInAndTimestampBetweenOrderByTimestampDesc(
+                        member.getId(), ATTENDANCE_TYPES, range[0], range[1]);
+        boolean hasLoginToday = todayAttendance.stream().anyMatch(activity -> "LOGIN".equals(activity.getType()));
+        boolean hasLogoutToday = todayAttendance.stream().anyMatch(activity -> "LOGOUT".equals(activity.getType()));
+        if (hasLoginToday && !hasLogoutToday) {
+            return "ON_DUTY";
+        }
+        return "ACTIVE";
     }
 
     private void applyLocation(TrackingActivity activity, LocationCoordsDto location) {

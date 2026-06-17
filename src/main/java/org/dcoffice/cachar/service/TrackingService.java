@@ -23,19 +23,24 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class TrackingService {
 
     private static final int DEFAULT_LOG_LIMIT = 100;
     private static final int MAX_LOG_LIMIT = 500;
+    private static final ZoneId MUNICIPAL_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final List<String> ATTENDANCE_TYPES = Arrays.asList("LOGIN", "LOGOUT");
 
     @Autowired
     private TrackingSquadRepository trackingSquadRepository;
@@ -75,7 +80,9 @@ public class TrackingService {
     }
 
     public List<TrackingMember> getAllMembers() {
-        return trackingMemberRepository.findAllByOrderByNameAsc();
+        List<TrackingMember> members = trackingMemberRepository.findAllByOrderByNameAsc();
+        applySameDayAttendanceStatus(members, null);
+        return members;
     }
 
     public TrackingSquad createSquad(CreateTrackingSquadRequest request) {
@@ -214,7 +221,9 @@ public class TrackingService {
 
     public List<TrackingMember> getMembersBySquadId(String squadId) {
         requireSquad(squadId);
-        return trackingMemberRepository.findBySquadIdOrderByNameAsc(squadId);
+        List<TrackingMember> members = trackingMemberRepository.findBySquadIdOrderByNameAsc(squadId);
+        applySameDayAttendanceStatus(members, squadId);
+        return members;
     }
 
     public List<TrackingActivity> getActivityBySquadId(String squadId, Integer limit) {
@@ -285,7 +294,9 @@ public class TrackingService {
     private TrackingDashboardItemDto buildDashboardItem(TrackingSquad squad, int activityLimit, Instant[] dateRange) {
         TrackingDashboardItemDto item = new TrackingDashboardItemDto();
         item.setSquad(squad);
-        item.setMembers(trackingMemberRepository.findBySquadIdOrderByNameAsc(squad.getId()));
+        List<TrackingMember> members = trackingMemberRepository.findBySquadIdOrderByNameAsc(squad.getId());
+        applySameDayAttendanceStatus(members, squad.getId());
+        item.setMembers(members);
 
         PageRequest pageRequest = PageRequest.of(0, activityLimit, Sort.by(Sort.Direction.DESC, "timestamp"));
         Page<TrackingActivity> latest = trackingActivityRepository.findBySquadIdAndTimestampBetween(
@@ -295,7 +306,7 @@ public class TrackingService {
     }
 
     private Instant[] parseDateRange(String dateFrom, String dateTo) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = LocalDate.now(MUNICIPAL_ZONE);
         LocalDate from = parseDate(dateFrom, today);
         LocalDate to = parseDate(dateTo, today);
         // Ensure from <= to
@@ -303,9 +314,44 @@ public class TrackingService {
             to = from;
         }
         return new Instant[]{
-            from.atStartOfDay(ZoneOffset.UTC).toInstant(),
-            to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+            from.atStartOfDay(MUNICIPAL_ZONE).toInstant(),
+            to.plusDays(1).atStartOfDay(MUNICIPAL_ZONE).toInstant()
         };
+    }
+
+    private Instant[] todayRange() {
+        LocalDate today = LocalDate.now(MUNICIPAL_ZONE);
+        return new Instant[]{
+                today.atStartOfDay(MUNICIPAL_ZONE).toInstant(),
+                today.plusDays(1).atStartOfDay(MUNICIPAL_ZONE).toInstant()
+        };
+    }
+
+    private void applySameDayAttendanceStatus(List<TrackingMember> members, String squadId) {
+        if (members == null || members.isEmpty()) {
+            return;
+        }
+
+        Instant[] today = todayRange();
+        List<TrackingActivity> attendance = squadId != null && !squadId.trim().isEmpty()
+                ? trackingActivityRepository.findBySquadIdAndTypeInAndTimestampBetween(squadId, ATTENDANCE_TYPES, today[0], today[1])
+                : trackingActivityRepository.findByTypeInAndTimestampBetween(ATTENDANCE_TYPES, today[0], today[1]);
+
+        Map<String, List<TrackingActivity>> byMember = attendance.stream()
+                .collect(Collectors.groupingBy(TrackingActivity::getMemberId));
+
+        for (TrackingMember member : members) {
+            List<TrackingActivity> memberAttendance = byMember.getOrDefault(member.getId(), Collections.emptyList());
+            boolean hasLoginToday = memberAttendance.stream().anyMatch(activity -> "LOGIN".equals(activity.getType()));
+            boolean hasLogoutToday = memberAttendance.stream().anyMatch(activity -> "LOGOUT".equals(activity.getType()));
+
+            boolean hasOpenAttendanceToday = hasLoginToday && !hasLogoutToday;
+            if (hasOpenAttendanceToday && (member.getStatus() == null || "ACTIVE".equals(member.getStatus()))) {
+                member.setStatus("ON_DUTY");
+            } else if (!hasOpenAttendanceToday && "ON_DUTY".equals(member.getStatus())) {
+                member.setStatus("ACTIVE");
+            }
+        }
     }
 
     private LocalDate parseDate(String date, LocalDate fallback) {
