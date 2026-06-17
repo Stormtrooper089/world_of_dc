@@ -7,6 +7,7 @@ import org.dcoffice.cachar.entity.PropertyTaxServiceRequest;
 import org.dcoffice.cachar.repository.CitizenRepository;
 import org.dcoffice.cachar.repository.PropertyTaxServiceRequestRepository;
 import org.dcoffice.cachar.service.propertytax.PropertyTaxProvider;
+import org.dcoffice.cachar.service.propertytax.UpyogClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +23,7 @@ public class PropertyTaxService {
     private final CitizenRepository citizenRepository;
     private final PropertyTaxServiceRequestRepository serviceRequestRepository;
     private final CounterService counterService;
+    private final UpyogClient upyogClient;
     private final String providerMode;
 
     public PropertyTaxService(
@@ -29,12 +31,14 @@ public class PropertyTaxService {
             CitizenRepository citizenRepository,
             PropertyTaxServiceRequestRepository serviceRequestRepository,
             CounterService counterService,
-            @Value("${property-tax.provider:${PROPERTY_TAX_PROVIDER:MOCK}}") String providerMode
+            UpyogClient upyogClient,
+            @Value("${property-tax.provider:${PROPERTY_TAX_PROVIDER:UPYOG}}") String providerMode
     ) {
         this.providers = providers;
         this.citizenRepository = citizenRepository;
         this.serviceRequestRepository = serviceRequestRepository;
         this.counterService = counterService;
+        this.upyogClient = upyogClient;
         this.providerMode = providerMode;
     }
 
@@ -81,6 +85,9 @@ public class PropertyTaxService {
         request.setRemarks(remarks);
         request.setSubmittedAt(LocalDateTime.now());
         request.setUpdatedAt(LocalDateTime.now());
+        if ("UPYOG".equalsIgnoreCase(providerMode)) {
+            upyogClient.createServiceRequest(citizenId, request.getHoldingNumber(), requestType, remarks);
+        }
         return serviceRequestRepository.save(request);
     }
 
