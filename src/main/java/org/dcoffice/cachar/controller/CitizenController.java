@@ -119,7 +119,8 @@ public class CitizenController {
     public ResponseEntity<ApiResponse<Citizen>> getCurrentCitizenProfile(Authentication authentication) {
         try {
             String citizenId = authentication.getName();
-            Optional<Citizen> citizenOpt = citizenService.findById(citizenId);
+            Citizen citizen = citizenService.ensureSmcCitizenId(citizenId);
+            Optional<Citizen> citizenOpt = Optional.of(citizen);
             if (citizenOpt.isPresent()) {
                 return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", citizenOpt.get()));
             } else {

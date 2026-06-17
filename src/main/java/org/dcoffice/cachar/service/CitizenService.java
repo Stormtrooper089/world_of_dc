@@ -25,6 +25,9 @@ public class CitizenService {
     @Autowired
     private OTPService otpService;
 
+    @Autowired
+    private CounterService counterService;
+
     public Citizen registerOrUpdateCitizen(Citizen citizen) {
         Optional<Citizen> existingCitizen = citizenRepository.findByMobileNumber(citizen.getMobileNumber());
 
@@ -158,6 +161,17 @@ public class CitizenService {
 
     public Optional<Citizen> findById(String id) {
         return citizenRepository.findById(id);
+    }
+
+    public Citizen ensureSmcCitizenId(String citizenId) {
+        Citizen citizen = citizenRepository.findById(citizenId)
+                .orElseThrow(() -> new CitizenNotFoundException("Citizen not found with id: " + citizenId));
+        if (citizen.getSmcCitizenId() == null || citizen.getSmcCitizenId().trim().isEmpty()) {
+            citizen.setSmcCitizenId("SMC-CIT-" + String.format("%06d", counterService.getNextSequence("smcCitizenId")));
+            citizen.setUpdatedAt(LocalDateTime.now());
+            citizen = citizenRepository.save(citizen);
+        }
+        return citizen;
     }
 
     public boolean isCitizenVerified(String mobileNumber) {

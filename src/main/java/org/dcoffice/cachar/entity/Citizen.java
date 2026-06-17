@@ -23,6 +23,9 @@ public class Citizen {
     @Indexed(unique = true)
     private String mobileNumber;
 
+    @Indexed(unique = true, sparse = true)
+    private String smcCitizenId;
+
     @NotBlank(message = "Name is required")
     private String name;
 
@@ -61,6 +64,9 @@ public class Citizen {
 
     public String getMobileNumber() { return mobileNumber; }
     public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
+
+    public String getSmcCitizenId() { return smcCitizenId; }
+    public void setSmcCitizenId(String smcCitizenId) { this.smcCitizenId = smcCitizenId; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
