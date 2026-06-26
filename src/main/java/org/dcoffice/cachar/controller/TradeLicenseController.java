@@ -3,6 +3,9 @@ package org.dcoffice.cachar.controller;
 import org.dcoffice.cachar.dto.ApiResponse;
 import org.dcoffice.cachar.dto.LinkTradeLicenseRequest;
 import org.dcoffice.cachar.dto.TradeLicenseApplicationRequest;
+import org.dcoffice.cachar.dto.TradeLicenseDecisionRequest;
+import org.dcoffice.cachar.dto.TradeLicenseFeedbackRequest;
+import org.dcoffice.cachar.dto.TradeLicensePaymentRequest;
 import org.dcoffice.cachar.entity.TradeLicense;
 import org.dcoffice.cachar.entity.TradeLicenseApplication;
 import org.dcoffice.cachar.service.TradeLicenseService;
@@ -10,7 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,8 +54,44 @@ public class TradeLicenseController {
         return ResponseEntity.ok(ApiResponse.success("Trade license application submitted", tradeLicenseService.submitApplication(authentication.getName(), request)));
     }
 
+    @PostMapping("/trade-license/applications/{applicationNumber}/pay")
+    public ResponseEntity<ApiResponse<TradeLicenseApplication>> payApplication(
+            @PathVariable String applicationNumber,
+            @RequestBody(required = false) TradeLicensePaymentRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Trade license payment recorded", tradeLicenseService.payApplication(authentication.getName(), applicationNumber, request)));
+    }
+
+    @PostMapping("/trade-license/applications/{applicationNumber}/feedback")
+    public ResponseEntity<ApiResponse<TradeLicenseApplication>> feedback(
+            @PathVariable String applicationNumber,
+            @Valid @RequestBody TradeLicenseFeedbackRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Trade license feedback submitted", tradeLicenseService.submitFeedback(authentication.getName(), applicationNumber, request)));
+    }
+
     @GetMapping("/officer/trade-license/dashboard")
     public ResponseEntity<ApiResponse<Map<String, Object>>> officerDashboard() {
         return ResponseEntity.ok(ApiResponse.success("Trade license dashboard retrieved", tradeLicenseService.dashboard()));
+    }
+
+    @PutMapping("/officer/trade-license/applications/{applicationNumber}/approve")
+    public ResponseEntity<ApiResponse<TradeLicenseApplication>> approveApplication(
+            @PathVariable String applicationNumber,
+            @RequestBody(required = false) TradeLicenseDecisionRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Trade license application accepted", tradeLicenseService.approveApplication(applicationNumber, authentication.getName(), request)));
+    }
+
+    @PutMapping("/officer/trade-license/applications/{applicationNumber}/reject")
+    public ResponseEntity<ApiResponse<TradeLicenseApplication>> rejectApplication(
+            @PathVariable String applicationNumber,
+            @RequestBody(required = false) TradeLicenseDecisionRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Trade license application rejected", tradeLicenseService.rejectApplication(applicationNumber, authentication.getName(), request)));
     }
 }

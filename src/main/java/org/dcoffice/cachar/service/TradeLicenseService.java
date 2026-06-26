@@ -1,10 +1,15 @@
 package org.dcoffice.cachar.service;
 
 import org.dcoffice.cachar.dto.TradeLicenseApplicationRequest;
+import org.dcoffice.cachar.dto.TradeLicenseDecisionRequest;
+import org.dcoffice.cachar.dto.TradeLicenseFeedbackRequest;
+import org.dcoffice.cachar.dto.TradeLicensePaymentRequest;
 import org.dcoffice.cachar.entity.Citizen;
+import org.dcoffice.cachar.entity.Officer;
 import org.dcoffice.cachar.entity.TradeLicense;
 import org.dcoffice.cachar.entity.TradeLicenseApplication;
 import org.dcoffice.cachar.repository.CitizenRepository;
+import org.dcoffice.cachar.repository.OfficerRepository;
 import org.dcoffice.cachar.repository.TradeLicenseApplicationRepository;
 import org.dcoffice.cachar.repository.TradeLicenseRepository;
 import org.springframework.stereotype.Service;
@@ -24,17 +29,20 @@ public class TradeLicenseService {
     private final CitizenRepository citizenRepository;
     private final TradeLicenseRepository licenseRepository;
     private final TradeLicenseApplicationRepository applicationRepository;
+    private final OfficerRepository officerRepository;
     private final CounterService counterService;
 
     public TradeLicenseService(
             CitizenRepository citizenRepository,
             TradeLicenseRepository licenseRepository,
             TradeLicenseApplicationRepository applicationRepository,
+            OfficerRepository officerRepository,
             CounterService counterService
     ) {
         this.citizenRepository = citizenRepository;
         this.licenseRepository = licenseRepository;
         this.applicationRepository = applicationRepository;
+        this.officerRepository = officerRepository;
         this.counterService = counterService;
     }
 
@@ -89,7 +97,100 @@ public class TradeLicenseService {
         application.setLocality(request.getLocality());
         application.setRemarks(request.getRemarks());
         application.setStatus("SUBMITTED");
+        application.setPaymentStatus("NOT_REQUIRED");
+        application.setProvider("UPYOG_READY");
+        application.setUpyogApplicationId("UPYOG-TL-" + application.getApplicationNumber());
+        application.setUpyogPaymentConsumerCode(application.getApplicationNumber());
         application.setSubmittedAt(LocalDateTime.now());
+        application.setUpdatedAt(LocalDateTime.now());
+        return applicationRepository.save(application);
+    }
+
+    public TradeLicenseApplication approveApplication(String applicationNumber, String officerId, TradeLicenseDecisionRequest request) {
+        TradeLicenseApplication application = findApplication(applicationNumber);
+        if (!"SUBMITTED".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("Only submitted trade license applications can be accepted");
+        }
+
+        BigDecimal payableAmount = request != null && request.getPayableAmount() != null
+                ? request.getPayableAmount()
+                : defaultPayableAmount(application);
+        if (payableAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Payable amount cannot be negative");
+        }
+
+        Officer officer = officerRepository.findById(officerId).orElse(null);
+        LocalDateTime now = LocalDateTime.now();
+        application.setStatus(payableAmount.compareTo(BigDecimal.ZERO) == 0 ? "APPROVED" : "PAYMENT_PENDING");
+        application.setPaymentStatus(payableAmount.compareTo(BigDecimal.ZERO) == 0 ? "NOT_REQUIRED" : "PENDING");
+        application.setPayableAmount(payableAmount);
+        application.setProcessedByOfficerId(officerId);
+        application.setProcessedByOfficerName(officer != null ? officer.getName() : "SMC Officer");
+        application.setOfficerRemarks(request == null ? null : request.getRemarks());
+        application.setProcessedAt(now);
+        application.setProvider("UPYOG_READY");
+        application.setUpyogBusinessService("TL");
+        if (application.getUpyogApplicationId() == null) {
+            application.setUpyogApplicationId("UPYOG-TL-" + application.getApplicationNumber());
+        }
+        application.setUpyogPaymentConsumerCode(application.getApplicationNumber());
+        application.setUpdatedAt(now);
+        return applicationRepository.save(application);
+    }
+
+    public TradeLicenseApplication rejectApplication(String applicationNumber, String officerId, TradeLicenseDecisionRequest request) {
+        TradeLicenseApplication application = findApplication(applicationNumber);
+        if (!"SUBMITTED".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("Only submitted trade license applications can be rejected");
+        }
+        Officer officer = officerRepository.findById(officerId).orElse(null);
+        LocalDateTime now = LocalDateTime.now();
+        application.setStatus("REJECTED");
+        application.setPaymentStatus("NOT_REQUIRED");
+        application.setProcessedByOfficerId(officerId);
+        application.setProcessedByOfficerName(officer != null ? officer.getName() : "SMC Officer");
+        application.setOfficerRemarks(request == null ? null : request.getRemarks());
+        application.setRejectionReason(request == null ? null : request.getRejectionReason());
+        application.setProcessedAt(now);
+        application.setUpdatedAt(now);
+        return applicationRepository.save(application);
+    }
+
+    public TradeLicenseApplication payApplication(String citizenId, String applicationNumber, TradeLicensePaymentRequest request) {
+        TradeLicenseApplication application = findApplication(applicationNumber);
+        assertCitizenOwnsApplication(citizenId, application);
+        if (!"PAYMENT_PENDING".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("Trade license application is not pending payment");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        String receiptNumber = "SMC-TL-RCPT-" + String.format("%06d", counterService.getNextSequence("tradeLicenseReceipt"));
+        application.setStatus("ISSUED");
+        application.setPaymentStatus("PAID");
+        application.setPaymentMode(request == null || request.getPaymentMode() == null ? "UPYOG_SANDBOX" : request.getPaymentMode());
+        application.setPaymentReference("UPYOG-PAY-TL-" + receiptNumber);
+        application.setReceiptNumber(receiptNumber);
+        application.setPaidAt(now);
+        application.setUpdatedAt(now);
+
+        TradeLicense license = issueOrRenewLicense(application, now);
+        application.setLicenseNumber(license.getLicenseNumber());
+        applicationRepository.save(application);
+        return application;
+    }
+
+    public TradeLicenseApplication submitFeedback(String citizenId, String applicationNumber, TradeLicenseFeedbackRequest request) {
+        TradeLicenseApplication application = findApplication(applicationNumber);
+        assertCitizenOwnsApplication(citizenId, application);
+        if (!"ISSUED".equalsIgnoreCase(application.getStatus()) && !"APPROVED".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("Feedback can be submitted after the license request is approved or issued");
+        }
+        if (request == null || request.getRating() == null || request.getRating() < 1 || request.getRating() > 5) {
+            throw new IllegalArgumentException("Feedback rating must be between 1 and 5");
+        }
+        application.setCitizenRating(request.getRating());
+        application.setCitizenFeedback(request.getFeedback());
+        application.setFeedbackAt(LocalDateTime.now());
         application.setUpdatedAt(LocalDateTime.now());
         return applicationRepository.save(application);
     }
@@ -106,7 +207,10 @@ public class TradeLicenseService {
         response.put("totalLicenses", licenses.size());
         response.put("activeLicenses", licenseRepository.countByStatus("ACTIVE"));
         response.put("expiredLicenses", licenseRepository.countByStatus("EXPIRED"));
-        response.put("pendingApplications", applicationRepository.countByStatus("SUBMITTED"));
+        response.put("pendingApplications", applications.stream()
+                .filter(application -> !"REJECTED".equalsIgnoreCase(application.getStatus())
+                        && !"ISSUED".equalsIgnoreCase(application.getStatus()))
+                .count());
         response.put("totalDue", totalDue);
         response.put("recentApplications", applications.stream()
                 .sorted(Comparator.comparing(TradeLicenseApplication::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -154,6 +258,62 @@ public class TradeLicenseService {
         license.setAmountDue(BigDecimal.valueOf(amountDue));
         license.setStatus(status);
         return license;
+    }
+
+    private TradeLicenseApplication findApplication(String applicationNumber) {
+        return applicationRepository.findByApplicationNumberIgnoreCase(applicationNumber)
+                .orElseThrow(() -> new IllegalArgumentException("Trade license application not found"));
+    }
+
+    private void assertCitizenOwnsApplication(String citizenId, TradeLicenseApplication application) {
+        if (!citizenId.equals(application.getCitizenId())) {
+            throw new IllegalArgumentException("This trade license application is not linked to your SMC account");
+        }
+    }
+
+    private BigDecimal defaultPayableAmount(TradeLicenseApplication application) {
+        if ("CLOSURE".equalsIgnoreCase(application.getApplicationType())) {
+            return BigDecimal.ZERO;
+        }
+        if ("RENEWAL".equalsIgnoreCase(application.getApplicationType())) {
+            return BigDecimal.valueOf(1800);
+        }
+        if ("CORRECTION".equalsIgnoreCase(application.getApplicationType())) {
+            return BigDecimal.valueOf(250);
+        }
+        return BigDecimal.valueOf(2500);
+    }
+
+    private TradeLicense issueOrRenewLicense(TradeLicenseApplication application, LocalDateTime paidAt) {
+        TradeLicense license = null;
+        if (application.getLicenseNumber() != null && !application.getLicenseNumber().isBlank()) {
+            license = licenseRepository.findByLicenseNumber(normalize(application.getLicenseNumber())).orElse(null);
+        }
+        if (license == null) {
+            license = new TradeLicense();
+            license.setLicenseNumber("SMC-TL-" + String.format("%06d", counterService.getNextSequence("tradeLicense")));
+            license.setCreatedAt(paidAt);
+        }
+        license.setLinkedCitizenId(application.getCitizenId());
+        license.setSmcCitizenId(application.getSmcCitizenId());
+        license.setApplicantName(application.getApplicantName());
+        license.setMobileNumber(application.getMobileNumber());
+        license.setBusinessName(application.getBusinessName());
+        license.setTradeType(application.getTradeType());
+        license.setBusinessAddress(application.getBusinessAddress());
+        license.setWardNumber(application.getWardNumber());
+        license.setWardName(application.getWardNumber() == null ? null : "Ward " + application.getWardNumber());
+        license.setLocality(application.getLocality());
+        license.setValidFrom(LocalDate.now());
+        license.setValidTo(LocalDate.now().plusYears(1));
+        license.setAnnualFee(application.getPayableAmount());
+        license.setArrears(BigDecimal.ZERO);
+        license.setPenalty(BigDecimal.ZERO);
+        license.setAmountDue(BigDecimal.ZERO);
+        license.setStatus("ACTIVE");
+        license.setLinkedAt(paidAt);
+        license.setUpdatedAt(paidAt);
+        return licenseRepository.save(license);
     }
 
     private String normalize(String value) {
