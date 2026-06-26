@@ -3,6 +3,7 @@ package org.dcoffice.cachar.entity;
 
 public enum OfficerRole {
     ADMIN("Administrator"),
+    SMC_COMMISSIONER("SMC Commissioner"),
     DISTRICT_COMMISSIONER("District Commissioner"),
     ADDITIONAL_DISTRICT_COMMISSIONER("Additional District Commissioner"),
     ASSISTANT_DISTRICT_COMMISSIONER("Assistant District Commissioner"),

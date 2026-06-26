@@ -124,9 +124,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 case "WORKER_ADMIN":
                     return trackingMemberRepository.findById(userId).orElse(null);
                 case "ADMIN":
+                case "SMC_COMMISSIONER":
                 case "OFFICER":
                 case "DISTRICT_COMMISSIONER":
                 case "ADDITIONAL_DISTRICT_COMMISSIONER":
+                case "ASSISTANT_DISTRICT_COMMISSIONER":
+                case "ASSISTANT_COMMISSIONER":
+                case "CIRCLE_OFFICER":
                 case "BLOCK_DEVELOPMENT_OFFICER":
                 case "GRAM_PANCHAYAT_OFFICER":
                 case "TEHSILDAR":

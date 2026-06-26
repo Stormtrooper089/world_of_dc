@@ -9,6 +9,7 @@ import org.dcoffice.cachar.entity.AuctionDocument;
 import org.dcoffice.cachar.entity.AuctionListing;
 import org.dcoffice.cachar.entity.Citizen;
 import org.dcoffice.cachar.entity.Officer;
+import org.dcoffice.cachar.entity.OfficerRole;
 import org.dcoffice.cachar.repository.AuctionAuditTrailRepository;
 import org.dcoffice.cachar.repository.AuctionBidRepository;
 import org.dcoffice.cachar.repository.AuctionListingRepository;
@@ -25,10 +26,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class AuctionService {
+    private static final Set<OfficerRole> AUCTION_MANAGEMENT_ROLES = Set.of(
+            OfficerRole.ADMIN,
+            OfficerRole.SMC_COMMISSIONER,
+            OfficerRole.DISTRICT_COMMISSIONER,
+            OfficerRole.ADDITIONAL_DISTRICT_COMMISSIONER,
+            OfficerRole.ASSISTANT_COMMISSIONER,
+            OfficerRole.REVENUE_OFFICER
+    );
+
     private final AuctionListingRepository listingRepository;
     private final AuctionBidRepository bidRepository;
     private final AuctionAuditTrailRepository auditRepository;
@@ -146,6 +157,7 @@ public class AuctionService {
 
     public AuctionListing createAuction(String officerId, AuctionListingRequest request) {
         Officer officer = officer(officerId);
+        requireAuctionManager(officer);
         AuctionListing listing = new AuctionListing();
         listing.setAuctionId("SMC-AUC-" + String.format("%06d", counterService.getNextSequence("auctionListing")));
         applyRequest(listing, request);
@@ -161,6 +173,7 @@ public class AuctionService {
 
     public AuctionListing updateAuction(String auctionId, String officerId, AuctionListingRequest request) {
         Officer officer = officer(officerId);
+        requireAuctionManager(officer);
         AuctionListing listing = findListing(auctionId);
         if (List.of("CANCELLED", "AWARDED").contains(listing.getStatus())) {
             throw new IllegalArgumentException("Cancelled or awarded auctions cannot be edited");
@@ -175,6 +188,7 @@ public class AuctionService {
 
     public AuctionListing publish(String auctionId, String officerId) {
         Officer officer = officer(officerId);
+        requireAuctionManager(officer);
         AuctionListing listing = findListing(auctionId);
         validatePublishable(listing);
         String oldStatus = listing.getStatus();
@@ -187,6 +201,7 @@ public class AuctionService {
 
     public AuctionListing cancel(String auctionId, String officerId, AuctionActionRequest request) {
         Officer officer = officer(officerId);
+        requireAuctionManager(officer);
         AuctionListing listing = findListing(auctionId);
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Cancellation reason is required");
@@ -202,6 +217,7 @@ public class AuctionService {
 
     public AuctionListing award(String auctionId, String officerId, AuctionActionRequest request) {
         Officer officer = officer(officerId);
+        requireAuctionManager(officer);
         refreshTimedStatuses();
         AuctionListing listing = findListing(auctionId);
         if (listing.getEndAt() != null && LocalDateTime.now().isBefore(listing.getEndAt())) {
@@ -304,6 +320,12 @@ public class AuctionService {
         if (listing.getBasePrice() == null || listing.getBasePrice().compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("Base price must be greater than zero");
         if (listing.getBidIncrement() == null || listing.getBidIncrement().compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("Bid increment must be greater than zero");
         if (listing.getStartAt() == null || listing.getEndAt() == null || !listing.getEndAt().isAfter(listing.getStartAt())) throw new IllegalArgumentException("Valid start and end time are required");
+    }
+
+    private void requireAuctionManager(Officer officer) {
+        if (officer.getRole() == null || !AUCTION_MANAGEMENT_ROLES.contains(officer.getRole())) {
+            throw new IllegalArgumentException("Only Admin, SMC Commissioner, District Commissioner, Additional District Commissioner, Assistant Commissioner or Revenue Officer can manage auction listings");
+        }
     }
 
     private AuctionListing findListing(String auctionId) {
