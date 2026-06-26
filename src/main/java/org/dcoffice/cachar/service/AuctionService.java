@@ -18,6 +18,7 @@ import org.dcoffice.cachar.repository.OfficerRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -377,7 +378,7 @@ public class AuctionService {
     private BigDecimal minimumNextBid(AuctionListing listing) {
         BigDecimal highest = safeAmount(listing.getCurrentHighestBid());
         return highest.compareTo(BigDecimal.ZERO) > 0
-                ? highest.add(safeAmount(listing.getBidIncrement()))
+                ? highest.multiply(BigDecimal.valueOf(1.01)).setScale(0, RoundingMode.CEILING)
                 : safeAmount(listing.getBasePrice());
     }
 
