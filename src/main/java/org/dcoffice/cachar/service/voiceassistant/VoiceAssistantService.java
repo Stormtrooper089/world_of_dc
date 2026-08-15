@@ -88,16 +88,25 @@ public class VoiceAssistantService {
         }
     }
 
-    /** Per-turn identity context, threaded through tool execution. Never trust anything but this. */
+    /**
+     * Per-turn identity (and geo) context, threaded through tool execution.
+     * Never trust anything but this — in particular, latitude/longitude come
+     * from the widget's own navigator.geolocation call, never from the LLM's
+     * create_complaint arguments, so the model can't invent coordinates.
+     */
     private static class Identity {
         final String citizenId;
         final String mobileNumber;
         final String name;
+        final Double latitude;
+        final Double longitude;
 
-        Identity(String citizenId, String mobileNumber, String name) {
+        Identity(String citizenId, String mobileNumber, String name, Double latitude, Double longitude) {
             this.citizenId = citizenId;
             this.mobileNumber = mobileNumber;
             this.name = name;
+            this.latitude = latitude;
+            this.longitude = longitude;
         }
 
         boolean isKnown() {
@@ -105,8 +114,9 @@ public class VoiceAssistantService {
         }
     }
 
-    public VoiceReply handleTurn(String sessionId, String transcript, String citizenId, String citizenMobileNumber, String citizenName) {
-        Identity identity = new Identity(citizenId, citizenMobileNumber, citizenName);
+    public VoiceReply handleTurn(String sessionId, String transcript, String citizenId, String citizenMobileNumber,
+                                  String citizenName, Double latitude, Double longitude) {
+        Identity identity = new Identity(citizenId, citizenMobileNumber, citizenName, latitude, longitude);
         List<Map<String, Object>> conversation = conversations.computeIfAbsent(sessionId, id -> new ArrayList<>());
 
         Map<String, Object> userMessage = new LinkedHashMap<>();
@@ -152,17 +162,22 @@ public class VoiceAssistantService {
                 + "existing complaint's status via the track_complaint tool, (3) look up district services "
                 + "(property tax, trade license, waste pickup, etc.) via the search_district_services tool. "
                 + "Never invent a complaint number, status, or service detail — only state what a tool actually returned. "
-                + "Before calling create_complaint, you must have actually heard the citizen describe their issue in "
-                + "their own words — never call it with guessed, empty, or placeholder subject/description just "
-                + "because they said something like \"file a complaint\" or \"I want to report a problem\". If you "
-                + "don't yet know what the issue is or where it's happening, ask them first and wait for their answer.");
+                + "When filing a complaint, gather it one question at a time — ask only ONE thing per reply and wait "
+                + "for the citizen's answer before asking the next. Ask in this order: (a) what the problem is, in "
+                + "their own words — this becomes the subject and description; (b) where it's happening — a "
+                + "locality, ward, or landmark; (c) which category best fits, reading a few short options aloud "
+                + "(garbage collection, water supply, road damage, street light, drain blockage, or other) unless "
+                + "it's already obvious from what they said. Do not call create_complaint until you have real, "
+                + "specific answers for all of subject, description, location, and category — never guess, invent, "
+                + "or leave one blank just because they said something like \"file a complaint\" or \"I want to "
+                + "report a problem\". Never ask for GPS coordinates or a precise map location — their device's "
+                + "location is captured automatically.");
 
         if (identity.isKnown()) {
             prompt.append(" IDENTITY: this citizen is already logged in and verified")
                     .append(identity.name != null ? " (name: " + identity.name + ")" : "")
                     .append(". Their mobile number is already on file — do NOT ask for it, and do NOT read it back "
-                            + "unless they ask. When filing a complaint, only ask about the subject, description, "
-                            + "location, and category. You also have a list_my_complaints tool to look up this "
+                            + "unless they ask. You also have a list_my_complaints tool to look up this "
                             + "citizen's own recent complaints without needing a complaint number — prefer it when "
                             + "they say things like \"my complaint\" or \"my last complaint\" rather than asking "
                             + "them to recite a number they may not remember.");
@@ -228,12 +243,25 @@ public class VoiceAssistantService {
         // pass subject="" / description="" instead of actually asking the citizen,
         // which would otherwise sail past a null-only check and save a blank
         // complaint. This is the only guard against that — ComplaintService.
-        // createComplaint() does no field validation of its own.
+        // createComplaint() does no field validation of its own. location and
+        // category get the same treatment so the assistant can't skip straight
+        // to filing without having actually asked about them.
         if (subject == null || subject.isBlank() || description == null || description.isBlank()) {
             return toJson(Map.of("error",
                     "subject and description are still missing or empty. Ask the citizen to describe the issue "
                     + "in their own words, then call create_complaint again with their actual answer — "
                     + "never call it with placeholder or guessed text."));
+        }
+        if (location == null || location.isBlank()) {
+            return toJson(Map.of("error",
+                    "location is still missing. Ask the citizen where the issue is happening (locality, ward, or "
+                    + "landmark) before calling create_complaint again."));
+        }
+        if (categoryRaw == null || categoryRaw.isBlank()) {
+            return toJson(Map.of("error",
+                    "category is still missing. Ask the citizen which category best fits — garbage collection, "
+                    + "water supply, road damage, street light, drain blockage, or other — before calling "
+                    + "create_complaint again."));
         }
 
         Complaint complaint = new Complaint();
@@ -242,6 +270,10 @@ public class VoiceAssistantService {
         complaint.setDescription(description);
         complaint.setCategory(parseCategory(categoryRaw));
         complaint.setLocation(location);
+        // GPS comes from Identity (the widget's own navigator.geolocation call, threaded
+        // through the trusted request path), never from the LLM's tool-call input.
+        complaint.setLatitude(identity.latitude);
+        complaint.setLongitude(identity.longitude);
 
         Complaint saved = complaintService.createComplaint(complaint, null);
 
@@ -365,7 +397,7 @@ public class VoiceAssistantService {
                             "description", schemaString("Fuller description of the issue as the citizen described it"),
                             "category", schemaString("Best-matching category, e.g. GARBAGE_NOT_COLLECTED, WATER_SUPPLY, ROAD_DAMAGE, STREET_LIGHT, DRAIN_BLOCKAGE, OTHER"),
                             "location", schemaString("Locality, ward, or landmark the citizen mentioned")),
-                    List.of("subject", "description"));
+                    List.of("subject", "description", "location", "category"));
         }
         return tool("create_complaint",
                 "File a new citizen complaint. Requires the citizen's mobile number to already be "
@@ -378,7 +410,7 @@ public class VoiceAssistantService {
                         "description", schemaString("Fuller description of the issue as the citizen described it"),
                         "category", schemaString("Best-matching category, e.g. GARBAGE_NOT_COLLECTED, WATER_SUPPLY, ROAD_DAMAGE, STREET_LIGHT, DRAIN_BLOCKAGE, OTHER"),
                         "location", schemaString("Locality, ward, or landmark the citizen mentioned")),
-                List.of("mobileNumber", "subject", "description"));
+                List.of("mobileNumber", "subject", "description", "location", "category"));
     }
 
     private Map<String, Object> tool(String name, String description, Map<String, Object> properties, List<String> required) {

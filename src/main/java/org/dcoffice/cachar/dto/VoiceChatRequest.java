@@ -25,6 +25,13 @@ public class VoiceChatRequest {
     @NotBlank(message = "Transcript is required")
     private String transcript;
 
+    // Optional GPS fix from the widget's navigator.geolocation call — same trust
+    // level as the latitude/longitude the regular web complaint forms already
+    // accept directly from the client (ComplaintController's /create endpoint).
+    // Only actually used if the assistant ends up filing a complaint this turn.
+    private Double latitude;
+    private Double longitude;
+
     public VoiceChatRequest() {
     }
 
@@ -42,5 +49,21 @@ public class VoiceChatRequest {
 
     public void setTranscript(String transcript) {
         this.transcript = transcript;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
 }
