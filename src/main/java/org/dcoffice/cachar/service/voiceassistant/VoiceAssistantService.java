@@ -6,11 +6,13 @@ import org.dcoffice.cachar.entity.Complaint;
 import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.ComplaintHistory;
 import org.dcoffice.cachar.entity.DistrictService;
+import org.dcoffice.cachar.entity.PropertyTaxAccount;
 import org.dcoffice.cachar.repository.CitizenRepository;
 import org.dcoffice.cachar.repository.ComplaintRepository;
 import org.dcoffice.cachar.service.ComplaintHistoryService;
 import org.dcoffice.cachar.service.ComplaintService;
 import org.dcoffice.cachar.service.DistrictServiceRegistryService;
+import org.dcoffice.cachar.service.PropertyTaxService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -58,6 +60,7 @@ public class VoiceAssistantService {
     private final DistrictServiceRegistryService serviceRegistryService;
     private final CitizenRepository citizenRepository;
     private final ComplaintRepository complaintRepository;
+    private final PropertyTaxService propertyTaxService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, List<Map<String, Object>>> conversations = new ConcurrentHashMap<>();
@@ -67,13 +70,15 @@ public class VoiceAssistantService {
                                   ComplaintHistoryService complaintHistoryService,
                                   DistrictServiceRegistryService serviceRegistryService,
                                   CitizenRepository citizenRepository,
-                                  ComplaintRepository complaintRepository) {
+                                  ComplaintRepository complaintRepository,
+                                  PropertyTaxService propertyTaxService) {
         this.llmClient = llmClient;
         this.complaintService = complaintService;
         this.complaintHistoryService = complaintHistoryService;
         this.serviceRegistryService = serviceRegistryService;
         this.citizenRepository = citizenRepository;
         this.complaintRepository = complaintRepository;
+        this.propertyTaxService = propertyTaxService;
     }
 
     public static class VoiceReply {
@@ -158,34 +163,46 @@ public class VoiceAssistantService {
         StringBuilder prompt = new StringBuilder(
                 "You are the Cachar District Office citizen voice assistant. Citizens speak to you instead of "
                 + "typing, so keep replies short, plain-spoken, and free of markdown or lists — this text will be "
-                + "read aloud. You can: (1) file a new complaint via the create_complaint tool, (2) check an "
-                + "existing complaint's status via the track_complaint tool, (3) look up district services "
-                + "(property tax, trade license, waste pickup, etc.) via the search_district_services tool. "
-                + "Never invent a complaint number, status, or service detail — only state what a tool actually returned. "
-                + "When filing a complaint, gather it one question at a time — ask only ONE thing per reply and wait "
-                + "for the citizen's answer before asking the next. Ask in this order: (a) what the problem is, in "
-                + "their own words — this becomes the subject and description; (b) where it's happening — a "
-                + "locality, ward, or landmark; (c) which category best fits, reading a few short options aloud "
-                + "(garbage collection, water supply, road damage, street light, drain blockage, or other) unless "
-                + "it's already obvious from what they said. Do not call create_complaint until you have real, "
-                + "specific answers for all of subject, description, location, and category — never guess, invent, "
-                + "or leave one blank just because they said something like \"file a complaint\" or \"I want to "
-                + "report a problem\". Never ask for GPS coordinates or a precise map location — their device's "
-                + "location is captured automatically.");
+                + "read aloud. You can help with exactly these things: (1) file a new complaint via create_complaint, "
+                + "(2) check an existing complaint's status via track_complaint, (3) look up district services "
+                + "(property tax, trade license, waste pickup, etc.) via search_district_services"
+                + (identity.isKnown() ? ", (4) check this citizen's own property tax dues via check_property_tax_due." : "."));
+
+        prompt.append(
+                " CRITICAL — before doing anything else: if the citizen has not clearly and specifically told you "
+                + "which of the above they want, do NOT call any tool and do NOT guess. A vague message like "
+                + "\"I have a problem\", \"hello\", \"can you help me\", or just a greeting is NOT enough to infer "
+                + "intent — in that case, briefly restate the short list of things you can help with and ask them "
+                + "to pick one, then stop and wait for their answer. Never call create_complaint or any other tool "
+                + "in response to the citizen's very first message in a conversation unless that exact message "
+                + "already clearly and specifically names one of these actions with real detail (e.g. \"I want to "
+                + "report a broken streetlight on MG Road\" is enough; \"I want to file a complaint\" alone is not "
+                + "— that only tells you WHICH of the four things they want, not what the complaint itself is)."
+                + " Once they've clearly chosen to file a complaint, gather it one question at a time — ask only "
+                + "ONE thing per reply and wait for their answer before asking the next. Ask in this order: (a) "
+                + "what the problem is, in their own words — this becomes the subject and description; (b) where "
+                + "it's happening — a locality, ward, or landmark; (c) which category best fits, reading a few "
+                + "short options aloud (garbage collection, water supply, road damage, street light, drain "
+                + "blockage, or other) unless already obvious from what they said. Do not call create_complaint "
+                + "until you have real, specific answers for all of subject, description, location, and category "
+                + "— never guess, invent, or leave one blank. Never ask for GPS coordinates or a precise map "
+                + "location — their device's location is captured automatically. Never invent a complaint number, "
+                + "status, service detail, or tax amount — only state what a tool actually returned.");
 
         if (identity.isKnown()) {
             prompt.append(" IDENTITY: this citizen is already logged in and verified")
                     .append(identity.name != null ? " (name: " + identity.name + ")" : "")
                     .append(". Their mobile number is already on file — do NOT ask for it, and do NOT read it back "
-                            + "unless they ask. You also have a list_my_complaints tool to look up this "
-                            + "citizen's own recent complaints without needing a complaint number — prefer it when "
-                            + "they say things like \"my complaint\" or \"my last complaint\" rather than asking "
-                            + "them to recite a number they may not remember.");
+                            + "unless they ask. Prefer list_my_complaints over asking for a complaint number when "
+                            + "they say things like \"my complaint\" or \"my last complaint\". check_property_tax_due "
+                            + "takes no arguments — call it directly once they've asked about their property tax "
+                            + "dues, don't ask them for a holding number first.");
         } else {
             prompt.append(" IDENTITY: this citizen is not logged in. If they want to file a complaint, ask for "
                     + "their registered mobile number first — create_complaint will tell you if it's not yet "
                     + "OTP-verified, in which case tell them to verify on the portal first. Status lookups by "
-                    + "complaint number and service questions don't require login.");
+                    + "complaint number and service questions don't require login. Checking property tax dues "
+                    + "does require login — if they ask about that, tell them to log in on the portal first.");
         }
         return prompt.toString();
     }
@@ -199,6 +216,8 @@ public class VoiceAssistantService {
                     return trackComplaint(call.getInput(), actionTaken, complaintNumberHolder);
                 case "list_my_complaints":
                     return listMyComplaints(identity);
+                case "check_property_tax_due":
+                    return checkPropertyTaxDue(identity);
                 case "search_district_services":
                     return searchDistrictServices(call.getInput());
                 default:
@@ -214,10 +233,12 @@ public class VoiceAssistantService {
 
     private String createComplaint(Map<String, Object> input, Identity identity, String[] actionTaken, String[] complaintNumberHolder) {
         String resolvedCitizenId;
+        String resolvedMobileNumber;
 
         if (identity.isKnown()) {
             // Logged-in path: identity already verified by the JWT filter, no extra lookup needed.
             resolvedCitizenId = identity.citizenId;
+            resolvedMobileNumber = identity.mobileNumber;
         } else {
             // Anonymous fallback: same "must already be OTP-verified" gate as before, deliberately NOT
             // auto-creating an unverified citizen the way the officer-assisted flow elsewhere does.
@@ -232,6 +253,7 @@ public class VoiceAssistantService {
                         "message", "This mobile number has not completed OTP verification on the citizen portal yet."));
             }
             resolvedCitizenId = citizenOpt.get().getId();
+            resolvedMobileNumber = citizenOpt.get().getMobileNumber();
         }
 
         String subject = str(input.get("subject"));
@@ -266,6 +288,7 @@ public class VoiceAssistantService {
 
         Complaint complaint = new Complaint();
         complaint.setCitizenId(resolvedCitizenId);
+        complaint.setMobileNumber(resolvedMobileNumber);
         complaint.setSubject(subject);
         complaint.setDescription(description);
         complaint.setCategory(parseCategory(categoryRaw));
@@ -337,6 +360,43 @@ public class VoiceAssistantService {
         return toJson(result);
     }
 
+    /** Only reachable when identity.isKnown() — see toolDefinitions(). Reuses the same service the /api/property-tax/account REST endpoint calls. */
+    @SuppressWarnings("unchecked")
+    private String checkPropertyTaxDue(Identity identity) {
+        if (!identity.isKnown()) {
+            return toJson(Map.of("error", "Must be logged in to check property tax dues."));
+        }
+
+        Map<String, Object> account = propertyTaxService.getCitizenAccount(identity.citizenId);
+        Object linkedPropertiesRaw = account.get("linkedProperties");
+        List<PropertyTaxAccount> linkedProperties = linkedPropertiesRaw instanceof List
+                ? (List<PropertyTaxAccount>) linkedPropertiesRaw
+                : List.of();
+
+        if (linkedProperties.isEmpty()) {
+            return toJson(Map.of(
+                    "linkedPropertyCount", 0,
+                    "message", "No property is linked to this citizen's account yet. They need to link their "
+                            + "holding number on the portal's property tax page before dues can be checked."));
+        }
+
+        List<Map<String, Object>> summarized = new ArrayList<>();
+        for (PropertyTaxAccount property : linkedProperties) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("holdingNumber", nullToEmpty(property.getHoldingNumber()));
+            row.put("amountDue", property.getAmountDue());
+            row.put("status", nullToEmpty(property.getStatus()));
+            row.put("financialYear", nullToEmpty(property.getFinancialYear()));
+            summarized.add(row);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalDue", account.get("totalDue"));
+        result.put("linkedPropertyCount", linkedProperties.size());
+        result.put("properties", summarized);
+        return toJson(result);
+    }
+
     private String searchDistrictServices(Map<String, Object> input) {
         String query = str(input.get("query"));
         List<DistrictService> services = serviceRegistryService.publicServices(query, null, null);
@@ -374,6 +434,10 @@ public class VoiceAssistantService {
             tools.add(tool("list_my_complaints",
                     "List the logged-in citizen's own recent complaints (no arguments needed) — use this instead "
                     + "of asking for a complaint number when they refer to \"my complaint\" or \"my last complaint\".",
+                    Map.of(), List.of()));
+            tools.add(tool("check_property_tax_due",
+                    "Check the logged-in citizen's own property tax dues for any property linked to their account "
+                    + "(no arguments needed).",
                     Map.of(), List.of()));
         }
 

@@ -26,6 +26,11 @@ public class Complaint {
     @Indexed
     private String citizenId; // MongoDB ID of the citizen
 
+    // Snapshot of the citizen's mobile number at filing time, same convention as
+    // PropertyTaxAccount/TradeLicense — lets officers see a contact number without
+    // an extra Citizen lookup. Optional; resolve via citizenId if absent on older docs.
+    private String mobileNumber;
+
     @NotBlank(message = "Subject is required")
     private String subject;
 
@@ -97,6 +102,9 @@ public class Complaint {
 
     public String getCitizenId() { return citizenId; }
     public void setCitizenId(String citizenId) { this.citizenId = citizenId; }
+
+    public String getMobileNumber() { return mobileNumber; }
+    public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
 
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
