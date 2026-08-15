@@ -62,7 +62,7 @@ public class ChatToolCallingClient {
      */
     public ToolCallTurn nextTurn(List<Map<String, Object>> messages, List<Map<String, Object>> toolDefinitions, String systemPrompt) {
         if (isPlaceholderMode()) {
-            return placeholderTurn(messages, systemPrompt);
+            return placeholderTurn();
         }
 
         // Groq's API is OpenAI-shaped: no top-level "system" field — the
@@ -170,51 +170,25 @@ public class ChatToolCallingClient {
     private volatile boolean placeholderWarningLogged = false;
 
     /**
-     * Deterministic fallback so the widget is demoable end-to-end before a
-     * real LLM key is configured. Deliberately dumb — replace by setting
-     * voiceassistant.llm.api-key in application.properties (or the
-     * corresponding env var), which routes real conversation through
-     * VoiceAssistantService's actual tool definitions instead.
-     *
-     * Citizen-facing text intentionally says nothing about "placeholder mode"
-     * or config keys — that's an operator concern, not something to read
-     * aloud to a citizen. It's logged once server-side instead, so whoever's
-     * watching the logs knows a real LLM key still needs to be configured.
+     * Fallback for when no real LLM key is configured. An earlier version of
+     * this tried to fake a conversation via keyword matching on the citizen's
+     * last message — no memory across turns, so it looked like broken
+     * understanding rather than an obviously-unconfigured assistant (e.g. it
+     * would reset to a generic greeting mid-way through filing a complaint
+     * the moment a message didn't contain a trigger word). Telling the
+     * citizen plainly that voice assistance isn't available right now, and
+     * pointing them at the web form, is more useful than a scripted exchange
+     * that can't actually track what they said.
      */
-    private ToolCallTurn placeholderTurn(List<Map<String, Object>> messages, String systemPrompt) {
+    private ToolCallTurn placeholderTurn() {
         if (!placeholderWarningLogged) {
             placeholderWarningLogged = true;
             org.slf4j.LoggerFactory.getLogger(ChatToolCallingClient.class).warn(
                     "Voice assistant is running in PLACEHOLDER mode (no voiceassistant.llm.api-key configured) — "
-                    + "citizens are getting canned responses, not real LLM-driven conversation.");
+                    + "citizens are being told the assistant is unavailable instead of getting real LLM-driven conversation.");
         }
-
-        boolean identityKnown = systemPrompt != null && systemPrompt.contains("already logged in and verified");
-        String lastUserText = lastUserMessageText(messages).toLowerCase();
-
-        if (lastUserText.contains("status") || lastUserText.contains("track") || lastUserText.contains("my complaint")) {
-            return ToolCallTurn.text(identityKnown
-                    ? "I can check that for you — do you have the complaint number, or would you like me to look up your recent complaints?"
-                    : "Please tell me your complaint number so I can check its status.");
-        }
-        if (lastUserText.contains("complaint") || lastUserText.contains("problem") || lastUserText.contains("issue")) {
-            return ToolCallTurn.text(identityKnown
-                    ? "I can help file that. Please tell me a short description of the issue and where it's happening."
-                    : "I can help file that complaint. Please share your registered mobile number and a short description of the issue and its location.");
-        }
-        return ToolCallTurn.text(identityKnown
-                ? "Namaskar! I can file a complaint, check on one of your complaints, or tell you about a district service. What would you like to do?"
-                : "Namaskar! I can help you file a complaint, check a complaint's status, or find a district service. What would you like to do?");
-    }
-
-    private String lastUserMessageText(List<Map<String, Object>> messages) {
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Map<String, Object> message = messages.get(i);
-            if ("user".equals(message.get("role"))) {
-                Object content = message.get("content");
-                return content == null ? "" : content.toString();
-            }
-        }
-        return "";
+        return ToolCallTurn.text(
+                "Sorry, the voice assistant isn't available right now. Please use the complaint form on the "
+                + "portal, or check back in a little while.");
     }
 }
