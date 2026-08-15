@@ -40,6 +40,8 @@ mvn test
 
 Production requires one environment variable: `JWT_SECRET` (set in Render dashboard). MongoDB URI is currently hardcoded in `application-prod.properties` (same Atlas cluster as dev).
 
+Optional (voice assistant, degrades gracefully if unset — see `VoiceAssistantController`): `VOICEASSISTANT_LLM_API_KEY` (Groq), `BHASHINI_USER_ID` + `BHASHINI_API_KEY` (Bhashini cloud speech-to-text/text-to-speech for Hindi/Assamese/Bengali).
+
 ---
 
 ## Architecture

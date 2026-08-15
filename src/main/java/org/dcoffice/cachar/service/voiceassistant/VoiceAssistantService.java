@@ -151,7 +151,11 @@ public class VoiceAssistantService {
                 + "read aloud. You can: (1) file a new complaint via the create_complaint tool, (2) check an "
                 + "existing complaint's status via the track_complaint tool, (3) look up district services "
                 + "(property tax, trade license, waste pickup, etc.) via the search_district_services tool. "
-                + "Never invent a complaint number, status, or service detail — only state what a tool actually returned.");
+                + "Never invent a complaint number, status, or service detail — only state what a tool actually returned. "
+                + "Before calling create_complaint, you must have actually heard the citizen describe their issue in "
+                + "their own words — never call it with guessed, empty, or placeholder subject/description just "
+                + "because they said something like \"file a complaint\" or \"I want to report a problem\". If you "
+                + "don't yet know what the issue is or where it's happening, ask them first and wait for their answer.");
 
         if (identity.isKnown()) {
             prompt.append(" IDENTITY: this citizen is already logged in and verified")
@@ -220,8 +224,16 @@ public class VoiceAssistantService {
         String categoryRaw = str(input.get("category"));
         String location = str(input.get("location"));
 
-        if (subject == null || description == null) {
-            return toJson(Map.of("error", "Both a short subject and a fuller description are required."));
+        // Blank (not just null/missing) check matters here: an eager tool call can
+        // pass subject="" / description="" instead of actually asking the citizen,
+        // which would otherwise sail past a null-only check and save a blank
+        // complaint. This is the only guard against that — ComplaintService.
+        // createComplaint() does no field validation of its own.
+        if (subject == null || subject.isBlank() || description == null || description.isBlank()) {
+            return toJson(Map.of("error",
+                    "subject and description are still missing or empty. Ask the citizen to describe the issue "
+                    + "in their own words, then call create_complaint again with their actual answer — "
+                    + "never call it with placeholder or guessed text."));
         }
 
         Complaint complaint = new Complaint();
@@ -345,7 +357,9 @@ public class VoiceAssistantService {
         if (identity.isKnown()) {
             // No mobileNumber property at all — the LLM has nothing to ask for.
             return tool("create_complaint",
-                    "File a new citizen complaint for the already-logged-in citizen.",
+                    "File a new citizen complaint for the already-logged-in citizen. Only call this after the "
+                    + "citizen has told you what the issue actually is — never call it with empty or made-up "
+                    + "subject/description just because they said they want to file a complaint.",
                     Map.of(
                             "subject", schemaString("Short one-line summary of the issue"),
                             "description", schemaString("Fuller description of the issue as the citizen described it"),
@@ -355,7 +369,9 @@ public class VoiceAssistantService {
         }
         return tool("create_complaint",
                 "File a new citizen complaint. Requires the citizen's mobile number to already be "
-                + "OTP-verified on the portal; if not verified, tell the citizen to verify first.",
+                + "OTP-verified on the portal; if not verified, tell the citizen to verify first. Only call this "
+                + "after the citizen has told you what the issue actually is — never call it with empty or "
+                + "made-up subject/description just because they said they want to file a complaint.",
                 Map.of(
                         "mobileNumber", schemaString("10-digit mobile number, digits only"),
                         "subject", schemaString("Short one-line summary of the issue"),
