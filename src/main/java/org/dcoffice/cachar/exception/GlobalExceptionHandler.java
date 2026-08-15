@@ -59,6 +59,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage()));
     }
 
+    @ExceptionHandler(BhashiniException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBhashini(BhashiniException e) {
+        logger.error("Bhashini speech API error: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(e.getMessage()));
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException e) {
         logger.error("File size exceeds limit: {}", e.getMessage());

@@ -19,13 +19,20 @@ import java.util.Map;
 /**
  * Thin wrapper around a cloud LLM's tool-calling ("function calling") API.
  *
- * Defaults to Anthropic's Messages API (tool_use content blocks) — the same
+ * Targets Groq's free-tier, OpenAI-compatible chat completions API — the same
  * agentic-tool-calling pattern demonstrated in the AgenticAI training deck's
  * "Agentic Tool Calling" / "Talking to Databases" / "Fully Integrated Customer
- * Care Agent" sections. If you'd rather standardize on OpenAI's `tools` /
- * `tool_calls` shape or Gemini's `functionCall` shape instead, swap the two
- * private parse/build methods below — VoiceAssistantService only depends on
+ * Care Agent" sections, just against an OpenAI-shaped `tools`/`tool_calls`
+ * wire format instead of Anthropic's `tool_use` content blocks. If you'd
+ * rather standardize on Anthropic's or Gemini's `functionCall` shape instead,
+ * swap the parse/build methods below — VoiceAssistantService only depends on
  * the ToolCallTurn/ToolCall contract, not on this class's HTTP details.
+ *
+ * NOTE on the model default: Groq's lineup of hosted open models changes over
+ * time (they retire/add models fairly often). "llama-3.3-70b-versatile" is
+ * current as of this writing and is on Groq's free tier, but it's worth
+ * checking https://console.groq.com/docs/models before relying on it in
+ * production — override via voiceassistant.llm.model if it's been retired.
  *
  * Mirrors the existing UpyogClient pattern elsewhere in this codebase: with no
  * API key configured, it runs in "placeholder mode" with a small canned
@@ -38,17 +45,14 @@ public class ChatToolCallingClient {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${voiceassistant.llm.base-url:https://api.anthropic.com/v1/messages}")
+    @Value("${voiceassistant.llm.base-url:https://api.groq.com/openai/v1/chat/completions}")
     private String baseUrl;
 
     @Value("${voiceassistant.llm.api-key:}")
     private String apiKey;
 
-    @Value("${voiceassistant.llm.model:claude-sonnet-4-5}")
+    @Value("${voiceassistant.llm.model:llama-3.3-70b-versatile}")
     private String model;
-
-    @Value("${voiceassistant.llm.anthropic-version:2023-06-01}")
-    private String anthropicVersion;
 
     /**
      * One round-trip to the LLM: send the running conversation plus the tools
@@ -61,67 +65,102 @@ public class ChatToolCallingClient {
             return placeholderTurn(messages, systemPrompt);
         }
 
+        // Groq's API is OpenAI-shaped: no top-level "system" field — the
+        // system prompt is just the first message in the array.
+        List<Map<String, Object>> fullMessages = new ArrayList<>();
+        Map<String, Object> systemMessage = new LinkedHashMap<>();
+        systemMessage.put("role", "system");
+        systemMessage.put("content", systemPrompt);
+        fullMessages.add(systemMessage);
+        fullMessages.addAll(messages);
+
         ObjectNode body = objectMapper.createObjectNode();
         body.put("model", model);
         body.put("max_tokens", 1024);
-        body.put("system", systemPrompt);
-        body.set("messages", objectMapper.valueToTree(messages));
-        body.set("tools", objectMapper.valueToTree(toolDefinitions));
+        body.set("messages", objectMapper.valueToTree(fullMessages));
+        body.set("tools", objectMapper.valueToTree(wrapToolsForOpenAiShape(toolDefinitions)));
+        body.put("tool_choice", "auto");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("x-api-key", apiKey);
-        headers.set("anthropic-version", anthropicVersion);
+        headers.setBearerAuth(apiKey);
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(baseUrl, new HttpEntity<>(body, headers), JsonNode.class);
-        return parseAnthropicResponse(response.getBody());
+        return parseOpenAiCompatibleResponse(response.getBody());
     }
 
     /**
-     * Appends the assistant's tool_use turn and the corresponding tool_result
-     * turn to the conversation, in the shape Anthropic's API requires. Call
-     * this after executing every ToolCall from a non-final ToolCallTurn, then
-     * call nextTurn() again to let the model continue.
+     * VoiceAssistantService hands us tool definitions in the intermediate
+     * {name, description, input_schema} shape. OpenAI/Groq want each tool
+     * wrapped as {"type":"function","function":{name, description, parameters}}.
      */
-    public void appendToolResults(List<Map<String, Object>> messages, ToolCallTurn turn, Map<String, String> toolCallIdToResultJson) {
-        Map<String, Object> assistantMessage = new LinkedHashMap<>();
-        assistantMessage.put("role", "assistant");
-        assistantMessage.put("content", objectMapper.convertValue(turn.getRawAssistantMessage().get("content"), Object.class));
-        messages.add(assistantMessage);
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> wrapToolsForOpenAiShape(List<Map<String, Object>> toolDefinitions) {
+        List<Map<String, Object>> wrapped = new ArrayList<>();
+        for (Map<String, Object> toolDef : toolDefinitions) {
+            Map<String, Object> function = new LinkedHashMap<>();
+            function.put("name", toolDef.get("name"));
+            function.put("description", toolDef.get("description"));
+            function.put("parameters", toolDef.get("input_schema"));
 
-        List<Map<String, Object>> resultBlocks = new ArrayList<>();
-        for (ToolCall toolCall : turn.getToolCalls()) {
-            Map<String, Object> resultBlock = new LinkedHashMap<>();
-            resultBlock.put("type", "tool_result");
-            resultBlock.put("tool_use_id", toolCall.getId());
-            resultBlock.put("content", toolCallIdToResultJson.getOrDefault(toolCall.getId(), "{\"error\":\"tool did not return a result\"}"));
-            resultBlocks.add(resultBlock);
+            Map<String, Object> wrapper = new LinkedHashMap<>();
+            wrapper.put("type", "function");
+            wrapper.put("function", function);
+            wrapped.add(wrapper);
         }
-        Map<String, Object> userMessage = new LinkedHashMap<>();
-        userMessage.put("role", "user");
-        userMessage.put("content", resultBlocks);
-        messages.add(userMessage);
+        return wrapped;
     }
 
-    private ToolCallTurn parseAnthropicResponse(JsonNode responseBody) {
-        List<ToolCall> toolCalls = new ArrayList<>();
-        StringBuilder textBuilder = new StringBuilder();
+    /**
+     * Appends the assistant's tool-call turn and the corresponding tool
+     * result messages to the conversation, in the shape Groq/OpenAI require:
+     * the assistant message (with its own "tool_calls" array) followed by one
+     * separate {"role":"tool", "tool_call_id":..., "content":...} message per
+     * call — NOT a single combined message like Anthropic's format. Call this
+     * after executing every ToolCall from a non-final ToolCallTurn, then call
+     * nextTurn() again to let the model continue.
+     */
+    @SuppressWarnings("unchecked")
+    public void appendToolResults(List<Map<String, Object>> messages, ToolCallTurn turn, Map<String, String> toolCallIdToResultJson) {
+        Map<String, Object> assistantMessage = objectMapper.convertValue(turn.getRawAssistantMessage(), Map.class);
+        messages.add(assistantMessage);
 
-        JsonNode contentBlocks = responseBody.path("content");
-        for (JsonNode block : contentBlocks) {
-            String type = block.path("type").asText();
-            if ("tool_use".equals(type)) {
-                Map<String, Object> input = objectMapper.convertValue(block.path("input"), Map.class);
-                toolCalls.add(new ToolCall(block.path("id").asText(), block.path("name").asText(), input));
-            } else if ("text".equals(type)) {
-                textBuilder.append(block.path("text").asText());
+        for (ToolCall toolCall : turn.getToolCalls()) {
+            Map<String, Object> toolResultMessage = new LinkedHashMap<>();
+            toolResultMessage.put("role", "tool");
+            toolResultMessage.put("tool_call_id", toolCall.getId());
+            toolResultMessage.put("content", toolCallIdToResultJson.getOrDefault(toolCall.getId(), "{\"error\":\"tool did not return a result\"}"));
+            messages.add(toolResultMessage);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private ToolCallTurn parseOpenAiCompatibleResponse(JsonNode responseBody) {
+        JsonNode message = responseBody.path("choices").path(0).path("message");
+        JsonNode toolCallsNode = message.path("tool_calls");
+
+        if (toolCallsNode.isArray() && toolCallsNode.size() > 0) {
+            List<ToolCall> toolCalls = new ArrayList<>();
+            for (JsonNode toolCallNode : toolCallsNode) {
+                String id = toolCallNode.path("id").asText();
+                JsonNode function = toolCallNode.path("function");
+                String name = function.path("name").asText();
+                // Unlike Anthropic's structured "input" object, OpenAI/Groq
+                // send tool-call arguments as a JSON-encoded STRING that has
+                // to be parsed separately.
+                String argumentsJson = function.path("arguments").asText("{}");
+                Map<String, Object> input;
+                try {
+                    input = objectMapper.readValue(argumentsJson, Map.class);
+                } catch (Exception e) {
+                    input = new LinkedHashMap<>();
+                }
+                toolCalls.add(new ToolCall(id, name, input));
             }
+            return ToolCallTurn.toolUse(toolCalls, message);
         }
 
-        if (!toolCalls.isEmpty()) {
-            return ToolCallTurn.toolUse(toolCalls, responseBody);
-        }
-        return ToolCallTurn.text(textBuilder.toString());
+        return ToolCallTurn.text(message.path("content").asText(""));
     }
 
     private boolean isPlaceholderMode() {

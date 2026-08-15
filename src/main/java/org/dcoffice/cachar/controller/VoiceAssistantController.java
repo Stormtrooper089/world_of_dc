@@ -1,9 +1,14 @@
 package org.dcoffice.cachar.controller;
 
 import org.dcoffice.cachar.dto.ApiResponse;
+import org.dcoffice.cachar.dto.SpeechToTextRequest;
+import org.dcoffice.cachar.dto.SpeechToTextResponse;
+import org.dcoffice.cachar.dto.TextToSpeechRequest;
+import org.dcoffice.cachar.dto.TextToSpeechResponse;
 import org.dcoffice.cachar.dto.VoiceChatRequest;
 import org.dcoffice.cachar.dto.VoiceChatResponse;
 import org.dcoffice.cachar.entity.Citizen;
+import org.dcoffice.cachar.service.voiceassistant.BhashiniClient;
 import org.dcoffice.cachar.service.voiceassistant.VoiceAssistantService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -37,9 +42,11 @@ import javax.validation.Valid;
 public class VoiceAssistantController {
 
     private final VoiceAssistantService voiceAssistantService;
+    private final BhashiniClient bhashiniClient;
 
-    public VoiceAssistantController(VoiceAssistantService voiceAssistantService) {
+    public VoiceAssistantController(VoiceAssistantService voiceAssistantService, BhashiniClient bhashiniClient) {
         this.voiceAssistantService = voiceAssistantService;
+        this.bhashiniClient = bhashiniClient;
     }
 
     @PostMapping("/chat")
@@ -62,6 +69,20 @@ public class VoiceAssistantController {
                 request.getSessionId(), request.getTranscript(), citizenId, citizenMobileNumber, citizenName);
         VoiceChatResponse response = new VoiceChatResponse(request.getSessionId(), reply.text, reply.actionTaken, reply.complaintNumber);
         return ApiResponse.success("ok", response);
+    }
+
+    /** Cloud speech-to-text via Bhashini — audioBase64 must already be 16kHz mono PCM WAV (converted client-side). */
+    @PostMapping("/speech-to-text")
+    public ApiResponse<SpeechToTextResponse> speechToText(@Valid @RequestBody SpeechToTextRequest request) {
+        String transcript = bhashiniClient.transcribe(request.getAudioBase64(), request.getLanguage());
+        return ApiResponse.success("ok", new SpeechToTextResponse(transcript));
+    }
+
+    /** Cloud text-to-speech via Bhashini — returns a base64 WAV clip for the widget to play. */
+    @PostMapping("/text-to-speech")
+    public ApiResponse<TextToSpeechResponse> textToSpeech(@Valid @RequestBody TextToSpeechRequest request) {
+        String audioBase64 = bhashiniClient.synthesize(request.getText(), request.getLanguage());
+        return ApiResponse.success("ok", new TextToSpeechResponse(audioBase64, "wav"));
     }
 
     private boolean isCitizen(Authentication authentication) {
