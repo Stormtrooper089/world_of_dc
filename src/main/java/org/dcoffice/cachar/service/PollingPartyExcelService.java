@@ -146,8 +146,9 @@ public class PollingPartyExcelService {
 
     private String normalizePsName(String psName) {
 
+        if (psName == null) return "";
+
         return psName
-                .toUpperCase()
                 .replaceAll("\\s+", " ")
                 .replaceAll("\\(.*?\\)", "") // remove room variations
                 .trim();
