@@ -58,7 +58,7 @@ public class ChatToolCallingClient {
      */
     public ToolCallTurn nextTurn(List<Map<String, Object>> messages, List<Map<String, Object>> toolDefinitions, String systemPrompt) {
         if (isPlaceholderMode()) {
-            return placeholderTurn(messages);
+            return placeholderTurn(messages, systemPrompt);
         }
 
         ObjectNode body = objectMapper.createObjectNode();
@@ -128,25 +128,44 @@ public class ChatToolCallingClient {
         return apiKey == null || apiKey.isBlank() || apiKey.startsWith("dummy-");
     }
 
+    private volatile boolean placeholderWarningLogged = false;
+
     /**
      * Deterministic fallback so the widget is demoable end-to-end before a
      * real LLM key is configured. Deliberately dumb — replace by setting
      * voiceassistant.llm.api-key in application.properties (or the
      * corresponding env var), which routes real conversation through
      * VoiceAssistantService's actual tool definitions instead.
+     *
+     * Citizen-facing text intentionally says nothing about "placeholder mode"
+     * or config keys — that's an operator concern, not something to read
+     * aloud to a citizen. It's logged once server-side instead, so whoever's
+     * watching the logs knows a real LLM key still needs to be configured.
      */
-    private ToolCallTurn placeholderTurn(List<Map<String, Object>> messages) {
+    private ToolCallTurn placeholderTurn(List<Map<String, Object>> messages, String systemPrompt) {
+        if (!placeholderWarningLogged) {
+            placeholderWarningLogged = true;
+            org.slf4j.LoggerFactory.getLogger(ChatToolCallingClient.class).warn(
+                    "Voice assistant is running in PLACEHOLDER mode (no voiceassistant.llm.api-key configured) — "
+                    + "citizens are getting canned responses, not real LLM-driven conversation.");
+        }
+
+        boolean identityKnown = systemPrompt != null && systemPrompt.contains("already logged in and verified");
         String lastUserText = lastUserMessageText(messages).toLowerCase();
-        if (lastUserText.contains("status") || lastUserText.contains("track")) {
-            return ToolCallTurn.text("Please tell me your complaint number so I can check its status. "
-                    + "(Placeholder mode — set voiceassistant.llm.api-key to enable full conversation and voice complaint filing.)");
+
+        if (lastUserText.contains("status") || lastUserText.contains("track") || lastUserText.contains("my complaint")) {
+            return ToolCallTurn.text(identityKnown
+                    ? "I can check that for you — do you have the complaint number, or would you like me to look up your recent complaints?"
+                    : "Please tell me your complaint number so I can check its status.");
         }
         if (lastUserText.contains("complaint") || lastUserText.contains("problem") || lastUserText.contains("issue")) {
-            return ToolCallTurn.text("I can help file that complaint. Please share your registered mobile number and a short "
-                    + "description of the issue and its location. (Placeholder mode — set voiceassistant.llm.api-key for full tool-calling.)");
+            return ToolCallTurn.text(identityKnown
+                    ? "I can help file that. Please tell me a short description of the issue and where it's happening."
+                    : "I can help file that complaint. Please share your registered mobile number and a short description of the issue and its location.");
         }
-        return ToolCallTurn.text("Namaskar! I can help you file a complaint, check a complaint's status, or find a district service. "
-                + "What would you like to do? (Placeholder mode — set voiceassistant.llm.api-key in application.properties to enable the real assistant.)");
+        return ToolCallTurn.text(identityKnown
+                ? "Namaskar! I can file a complaint, check on one of your complaints, or tell you about a district service. What would you like to do?"
+                : "Namaskar! I can help you file a complaint, check a complaint's status, or find a district service. What would you like to do?");
     }
 
     private String lastUserMessageText(List<Map<String, Object>> messages) {
