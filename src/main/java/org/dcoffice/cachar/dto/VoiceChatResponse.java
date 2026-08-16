@@ -11,18 +11,21 @@ public class VoiceChatResponse {
 
     // Set when a tool actually mutated/read backend state, so the frontend can
     // show a confirmation chip in the transcript instead of just plain text.
-    // One of: "COMPLAINT_CREATED", "COMPLAINT_STATUS", "SERVICE_INFO", or null.
+    // One of: "COMPLAINT_CREATED", "COMPLAINT_STATUS", "SERVICE_INFO",
+    // "WASTE_PICKUP_REQUESTED", or null.
     private String actionTaken;
     private String complaintNumber;
+    private String trackingNumber;
 
     public VoiceChatResponse() {
     }
 
-    public VoiceChatResponse(String sessionId, String replyText, String actionTaken, String complaintNumber) {
+    public VoiceChatResponse(String sessionId, String replyText, String actionTaken, String complaintNumber, String trackingNumber) {
         this.sessionId = sessionId;
         this.replyText = replyText;
         this.actionTaken = actionTaken;
         this.complaintNumber = complaintNumber;
+        this.trackingNumber = trackingNumber;
     }
 
     public String getSessionId() {
@@ -55,5 +58,13 @@ public class VoiceChatResponse {
 
     public void setComplaintNumber(String complaintNumber) {
         this.complaintNumber = complaintNumber;
+    }
+
+    public String getTrackingNumber() {
+        return trackingNumber;
+    }
+
+    public void setTrackingNumber(String trackingNumber) {
+        this.trackingNumber = trackingNumber;
     }
 }

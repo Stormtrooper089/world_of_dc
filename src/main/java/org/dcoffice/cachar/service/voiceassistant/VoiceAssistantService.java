@@ -7,12 +7,17 @@ import org.dcoffice.cachar.entity.ComplaintCategory;
 import org.dcoffice.cachar.entity.ComplaintHistory;
 import org.dcoffice.cachar.entity.DistrictService;
 import org.dcoffice.cachar.entity.PropertyTaxAccount;
+import org.dcoffice.cachar.entity.WasteCategory;
+import org.dcoffice.cachar.entity.WastePickupRequest;
+import org.dcoffice.cachar.entity.WasteQuantityEstimate;
+import org.dcoffice.cachar.entity.WasteUrgency;
 import org.dcoffice.cachar.repository.CitizenRepository;
 import org.dcoffice.cachar.repository.ComplaintRepository;
 import org.dcoffice.cachar.service.ComplaintHistoryService;
 import org.dcoffice.cachar.service.ComplaintService;
 import org.dcoffice.cachar.service.DistrictServiceRegistryService;
 import org.dcoffice.cachar.service.PropertyTaxService;
+import org.dcoffice.cachar.service.WastePickupService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -61,6 +66,7 @@ public class VoiceAssistantService {
     private final CitizenRepository citizenRepository;
     private final ComplaintRepository complaintRepository;
     private final PropertyTaxService propertyTaxService;
+    private final WastePickupService wastePickupService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, List<Map<String, Object>>> conversations = new ConcurrentHashMap<>();
@@ -71,7 +77,8 @@ public class VoiceAssistantService {
                                   DistrictServiceRegistryService serviceRegistryService,
                                   CitizenRepository citizenRepository,
                                   ComplaintRepository complaintRepository,
-                                  PropertyTaxService propertyTaxService) {
+                                  PropertyTaxService propertyTaxService,
+                                  WastePickupService wastePickupService) {
         this.llmClient = llmClient;
         this.complaintService = complaintService;
         this.complaintHistoryService = complaintHistoryService;
@@ -79,17 +86,20 @@ public class VoiceAssistantService {
         this.citizenRepository = citizenRepository;
         this.complaintRepository = complaintRepository;
         this.propertyTaxService = propertyTaxService;
+        this.wastePickupService = wastePickupService;
     }
 
     public static class VoiceReply {
         public final String text;
         public final String actionTaken;
         public final String complaintNumber;
+        public final String trackingNumber;
 
-        VoiceReply(String text, String actionTaken, String complaintNumber) {
+        VoiceReply(String text, String actionTaken, String complaintNumber, String trackingNumber) {
             this.text = text;
             this.actionTaken = actionTaken;
             this.complaintNumber = complaintNumber;
+            this.trackingNumber = trackingNumber;
         }
     }
 
@@ -131,6 +141,7 @@ public class VoiceAssistantService {
 
         String[] actionTaken = new String[1];
         String[] complaintNumberHolder = new String[1];
+        String[] trackingNumberHolder = new String[1];
         String systemPrompt = buildSystemPrompt(identity);
         List<Map<String, Object>> tools = toolDefinitions(identity);
 
@@ -142,12 +153,12 @@ public class VoiceAssistantService {
                 assistantMessage.put("role", "assistant");
                 assistantMessage.put("content", turn.getFinalText());
                 conversation.add(assistantMessage);
-                return new VoiceReply(turn.getFinalText(), actionTaken[0], complaintNumberHolder[0]);
+                return new VoiceReply(turn.getFinalText(), actionTaken[0], complaintNumberHolder[0], trackingNumberHolder[0]);
             }
 
             Map<String, String> resultsByCallId = new LinkedHashMap<>();
             for (ToolCall call : turn.getToolCalls()) {
-                String resultJson = executeTool(call, identity, actionTaken, complaintNumberHolder);
+                String resultJson = executeTool(call, identity, actionTaken, complaintNumberHolder, trackingNumberHolder);
                 resultsByCallId.put(call.getId(), resultJson);
             }
             llmClient.appendToolResults(conversation, turn, resultsByCallId);
@@ -156,7 +167,7 @@ public class VoiceAssistantService {
         logger.warn("Voice assistant hit MAX_TOOL_ITERATIONS for session {}", sessionId);
         return new VoiceReply(
                 "Sorry, I'm having trouble completing that right now. Please try again, or use the web form.",
-                actionTaken[0], complaintNumberHolder[0]);
+                actionTaken[0], complaintNumberHolder[0], trackingNumberHolder[0]);
     }
 
     private String buildSystemPrompt(Identity identity) {
@@ -164,50 +175,65 @@ public class VoiceAssistantService {
                 "You are the Cachar District Office citizen voice assistant. Citizens speak to you instead of "
                 + "typing, so keep replies short, plain-spoken, and free of markdown or lists — this text will be "
                 + "read aloud. You can help with exactly these things: (1) file a new complaint via create_complaint, "
-                + "(2) check an existing complaint's status via track_complaint, (3) look up district services "
-                + "(property tax, trade license, waste pickup, etc.) via search_district_services"
-                + (identity.isKnown() ? ", (4) check this citizen's own property tax dues via check_property_tax_due." : "."));
+                + "(2) check an existing complaint's status via track_complaint, (3) request a waste/garbage pickup "
+                + "via create_waste_pickup_request, (4) look up district services (property tax, trade license, "
+                + "etc.) via search_district_services"
+                + (identity.isKnown() ? ", (5) check this citizen's own property tax dues via check_property_tax_due." : "."));
 
         prompt.append(
                 " CRITICAL — before doing anything else: if the citizen has not clearly and specifically told you "
                 + "which of the above they want, do NOT call any tool and do NOT guess. A vague message like "
                 + "\"I have a problem\", \"hello\", \"can you help me\", or just a greeting is NOT enough to infer "
                 + "intent — in that case, briefly restate the short list of things you can help with and ask them "
-                + "to pick one, then stop and wait for their answer. Never call create_complaint or any other tool "
-                + "in response to the citizen's very first message in a conversation unless that exact message "
-                + "already clearly and specifically names one of these actions with real detail (e.g. \"I want to "
-                + "report a broken streetlight on MG Road\" is enough; \"I want to file a complaint\" alone is not "
-                + "— that only tells you WHICH of the four things they want, not what the complaint itself is)."
-                + " Once they've clearly chosen to file a complaint, gather it one question at a time — ask only "
-                + "ONE thing per reply and wait for their answer before asking the next. Ask in this order: (a) "
-                + "what the problem is, in their own words — this becomes the subject and description; (b) where "
-                + "it's happening — a locality, ward, or landmark; (c) which category best fits, reading a few "
-                + "short options aloud (garbage collection, water supply, road damage, street light, drain "
-                + "blockage, or other) unless already obvious from what they said. Do not call create_complaint "
-                + "until you have real, specific answers for all of subject, description, location, and category "
-                + "— never guess, invent, or leave one blank. Never ask for GPS coordinates or a precise map "
-                + "location — their device's location is captured automatically. Never invent a complaint number, "
-                + "status, service detail, or tax amount — only state what a tool actually returned.");
+                + "to pick one, then stop and wait for their answer. Never call create_complaint, "
+                + "create_waste_pickup_request, or any other tool in response to the citizen's very first message "
+                + "in a conversation unless that exact message already clearly and specifically names one of these "
+                + "actions with real detail (e.g. \"I want to report a broken streetlight on MG Road\" is enough; "
+                + "\"I want to file a complaint\" alone is not — that only tells you WHICH action they want, not "
+                + "what the complaint itself is)."
+                + " Once they've clearly chosen to file a complaint OR request a waste pickup, gather it one "
+                + "question at a time — ask only ONE thing per reply and wait for their answer before asking the "
+                + "next; never guess, invent, or leave a field blank just to finish faster."
+                + " For a complaint, ask in this order: (a) what the problem is, in their own words — this becomes "
+                + "the subject and description; (b) where it's happening — a locality, ward, or landmark; (c) which "
+                + "category best fits, reading a few short options aloud (garbage collection, water supply, road "
+                + "damage, street light, drain blockage, or other) unless already obvious from what they said. Do "
+                + "not call create_complaint until you have real, specific answers for all of subject, description, "
+                + "location, and category."
+                + " For a waste pickup request, ask in this order: (a) what waste issue it is, in their own words "
+                + "— this becomes the description; (b) where the pickup should happen — a locality, ward, or "
+                + "landmark; (c) which category best fits, reading a few short options aloud (household waste not "
+                + "collected, bulk waste, construction or demolition debris, a dead animal, drain silt, market "
+                + "waste, festival waste, or other); (d) roughly how much waste — small, medium, large, or whether "
+                + "a truck is needed; (e) how urgent it is — normal, urgent, or a public health risk. Do not call "
+                + "create_waste_pickup_request until you have real answers for all of description, location, "
+                + "category, quantity, and urgency."
+                + " Never ask for GPS coordinates or a precise map location for either — their device's location "
+                + "is captured automatically. Never invent a complaint number, tracking number, status, service "
+                + "detail, or tax amount — only state what a tool actually returned.");
 
         if (identity.isKnown()) {
             prompt.append(" IDENTITY: this citizen is already logged in and verified")
                     .append(identity.name != null ? " (name: " + identity.name + ")" : "")
-                    .append(". Their mobile number is already on file — do NOT ask for it, and do NOT read it back "
-                            + "unless they ask. Prefer list_my_complaints over asking for a complaint number when "
-                            + "they say things like \"my complaint\" or \"my last complaint\". check_property_tax_due "
-                            + "takes no arguments — call it directly once they've asked about their property tax "
-                            + "dues, don't ask them for a holding number first.");
+                    .append(". Their name and mobile number are already on file — do NOT ask for either, and do "
+                            + "NOT read the mobile number back unless they ask. Prefer list_my_complaints over "
+                            + "asking for a complaint number when they say things like \"my complaint\" or \"my "
+                            + "last complaint\". check_property_tax_due takes no arguments — call it directly once "
+                            + "they've asked about their property tax dues, don't ask them for a holding number "
+                            + "first.");
         } else {
             prompt.append(" IDENTITY: this citizen is not logged in. If they want to file a complaint, ask for "
                     + "their registered mobile number first — create_complaint will tell you if it's not yet "
-                    + "OTP-verified, in which case tell them to verify on the portal first. Status lookups by "
-                    + "complaint number and service questions don't require login. Checking property tax dues "
-                    + "does require login — if they ask about that, tell them to log in on the portal first.");
+                    + "OTP-verified, in which case tell them to verify on the portal first. A waste pickup request "
+                    + "doesn't need login or OTP verification, but does need their name and a contact mobile "
+                    + "number — ask for both as part of gathering the request. Status lookups by complaint number "
+                    + "and service questions don't require login. Checking property tax dues does require login "
+                    + "— if they ask about that, tell them to log in on the portal first.");
         }
         return prompt.toString();
     }
 
-    private String executeTool(ToolCall call, Identity identity, String[] actionTaken, String[] complaintNumberHolder) {
+    private String executeTool(ToolCall call, Identity identity, String[] actionTaken, String[] complaintNumberHolder, String[] trackingNumberHolder) {
         try {
             switch (call.getName()) {
                 case "create_complaint":
@@ -218,6 +244,8 @@ public class VoiceAssistantService {
                     return listMyComplaints(identity);
                 case "check_property_tax_due":
                     return checkPropertyTaxDue(identity);
+                case "create_waste_pickup_request":
+                    return createWastePickupRequest(call.getInput(), identity, actionTaken, trackingNumberHolder);
                 case "search_district_services":
                     return searchDistrictServices(call.getInput());
                 default:
@@ -397,6 +425,97 @@ public class VoiceAssistantService {
         return toJson(result);
     }
 
+    /**
+     * Available to everyone — /api/waste-pickup/request is fully anonymous (no
+     * citizen login or OTP verification required, unlike create_complaint). When
+     * the citizen IS logged in, their name/mobile come from Identity and are
+     * never asked for or exposed in the tool schema — see createWastePickupTool().
+     */
+    private String createWastePickupRequest(Map<String, Object> input, Identity identity, String[] actionTaken, String[] trackingNumberHolder) {
+        String citizenName;
+        String citizenMobile;
+
+        if (identity.isKnown()) {
+            citizenName = identity.name;
+            citizenMobile = identity.mobileNumber;
+        } else {
+            citizenName = str(input.get("citizenName"));
+            citizenMobile = str(input.get("mobileNumber"));
+            if (citizenName == null || citizenName.isBlank()) {
+                return toJson(Map.of("error",
+                        "citizenName is still missing. Ask the citizen their name before calling "
+                        + "create_waste_pickup_request again."));
+            }
+            if (citizenMobile == null || citizenMobile.isBlank()) {
+                return toJson(Map.of("error",
+                        "mobileNumber is still missing. Ask the citizen for a contact mobile number before "
+                        + "calling create_waste_pickup_request again."));
+            }
+        }
+
+        String description = str(input.get("description"));
+        String location = str(input.get("location"));
+        String categoryRaw = str(input.get("category"));
+        String quantityRaw = str(input.get("quantity"));
+        String urgencyRaw = str(input.get("urgency"));
+
+        // Same blank-check philosophy as create_complaint: an eager tool call could
+        // pass empty strings instead of actually asking, which a null-only check
+        // wouldn't catch. WastePickupService.createRequest() does no validation of
+        // its own beyond what the (bypassed, multipart) REST controller enforces.
+        if (description == null || description.isBlank()) {
+            return toJson(Map.of("error",
+                    "description is still missing or empty. Ask the citizen what the waste issue actually is, "
+                    + "then call create_waste_pickup_request again with their actual answer."));
+        }
+        if (location == null || location.isBlank()) {
+            return toJson(Map.of("error",
+                    "location is still missing. Ask the citizen where the pickup should happen (locality, ward, "
+                    + "or landmark) before calling create_waste_pickup_request again."));
+        }
+        if (categoryRaw == null || categoryRaw.isBlank()) {
+            return toJson(Map.of("error",
+                    "category is still missing. Ask the citizen which category best fits — household waste not "
+                    + "collected, bulk waste, construction or demolition debris, dead animal, drain silt, market "
+                    + "waste, festival waste, or other — before calling create_waste_pickup_request again."));
+        }
+        if (quantityRaw == null || quantityRaw.isBlank()) {
+            return toJson(Map.of("error",
+                    "quantity is still missing. Ask the citizen roughly how much waste — small, medium, large, "
+                    + "or whether a truck is needed — before calling create_waste_pickup_request again."));
+        }
+        if (urgencyRaw == null || urgencyRaw.isBlank()) {
+            return toJson(Map.of("error",
+                    "urgency is still missing. Ask the citizen how urgent it is — normal, urgent, or a public "
+                    + "health risk — before calling create_waste_pickup_request again."));
+        }
+
+        WastePickupRequest request = new WastePickupRequest();
+        request.setCitizenName(citizenName);
+        request.setCitizenMobile(citizenMobile);
+        request.setDescription(description);
+        request.setLocality(location);
+        request.setFullAddress(location);
+        request.setWasteCategory(parseWasteCategory(categoryRaw));
+        request.setEstimatedQuantity(parseWasteQuantity(quantityRaw));
+        request.setUrgency(parseWasteUrgency(urgencyRaw));
+        // GPS comes from Identity (the widget's own navigator.geolocation call, threaded
+        // through the trusted request path), never from the LLM's tool-call input.
+        request.setLatitude(identity.latitude);
+        request.setLongitude(identity.longitude);
+
+        WastePickupRequest saved = wastePickupService.createRequest(request, null);
+
+        actionTaken[0] = "WASTE_PICKUP_REQUESTED";
+        trackingNumberHolder[0] = saved.getTrackingId();
+
+        return toJson(Map.of(
+                "trackingId", saved.getTrackingId(),
+                "status", saved.getStatus().name(),
+                "slaHours", saved.getSlaHours(),
+                "message", "Waste pickup request submitted successfully."));
+    }
+
     private String searchDistrictServices(Map<String, Object> input) {
         String query = str(input.get("query"));
         List<DistrictService> services = serviceRegistryService.publicServices(query, null, null);
@@ -429,6 +548,7 @@ public class VoiceAssistantService {
                 "Look up an existing complaint's current status by its complaint number.",
                 Map.of("complaintNumber", schemaString("The complaint number the citizen was given when they filed, e.g. CMP-2026-000123")),
                 List.of("complaintNumber")));
+        tools.add(createWastePickupTool(identity));
 
         if (identity.isKnown()) {
             tools.add(tool("list_my_complaints",
@@ -477,6 +597,38 @@ public class VoiceAssistantService {
                 List.of("mobileNumber", "subject", "description", "location", "category"));
     }
 
+    private Map<String, Object> createWastePickupTool(Identity identity) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("description", schemaString("What waste issue it is, in the citizen's own words"));
+        properties.put("location", schemaString("Locality, ward, or landmark where the pickup should happen"));
+        properties.put("category", schemaString("Best-matching category, e.g. HOUSEHOLD_WASTE_NOT_COLLECTED, "
+                + "BULK_WASTE, CONSTRUCTION_DEMOLITION_WASTE, DEAD_ANIMAL, DRAIN_SILT_GARBAGE, MARKET_WASTE, "
+                + "FESTIVAL_EVENT_WASTE, OTHER"));
+        properties.put("quantity", schemaString("Estimated amount, e.g. SMALL, MEDIUM, LARGE, TRUCK_REQUIRED"));
+        properties.put("urgency", schemaString("How urgent, e.g. NORMAL, URGENT, PUBLIC_HEALTH_RISK"));
+
+        if (identity.isKnown()) {
+            // No citizenName/mobileNumber properties at all — the LLM has nothing to ask for.
+            return tool("create_waste_pickup_request",
+                    "Request a waste/garbage pickup for the already-logged-in citizen. Only call this after the "
+                    + "citizen has described the waste issue, its location, category, quantity, and urgency — "
+                    + "never call it with empty or made-up values.",
+                    properties,
+                    List.of("description", "location", "category", "quantity", "urgency"));
+        }
+
+        Map<String, Object> anonymousProperties = new LinkedHashMap<>(properties);
+        anonymousProperties.put("citizenName", schemaString("The citizen's name"));
+        anonymousProperties.put("mobileNumber", schemaString("A contact mobile number for this pickup"));
+        return tool("create_waste_pickup_request",
+                "Request a waste/garbage pickup. Does not require login or OTP verification, but does need the "
+                + "citizen's name and a contact mobile number. Only call this after the citizen has described the "
+                + "waste issue, its location, category, quantity, and urgency — never call it with empty or "
+                + "made-up values.",
+                anonymousProperties,
+                List.of("citizenName", "mobileNumber", "description", "location", "category", "quantity", "urgency"));
+    }
+
     private Map<String, Object> tool(String name, String description, Map<String, Object> properties, List<String> required) {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
@@ -502,6 +654,39 @@ public class VoiceAssistantService {
             return ComplaintCategory.valueOf(raw.trim().toUpperCase().replace(' ', '_'));
         } catch (IllegalArgumentException e) {
             return ComplaintCategory.OTHER;
+        }
+    }
+
+    private WasteCategory parseWasteCategory(String raw) {
+        if (raw == null) {
+            return WasteCategory.OTHER;
+        }
+        try {
+            return WasteCategory.valueOf(raw.trim().toUpperCase().replace(' ', '_'));
+        } catch (IllegalArgumentException e) {
+            return WasteCategory.OTHER;
+        }
+    }
+
+    private WasteQuantityEstimate parseWasteQuantity(String raw) {
+        if (raw == null) {
+            return WasteQuantityEstimate.SMALL;
+        }
+        try {
+            return WasteQuantityEstimate.valueOf(raw.trim().toUpperCase().replace(' ', '_'));
+        } catch (IllegalArgumentException e) {
+            return WasteQuantityEstimate.SMALL;
+        }
+    }
+
+    private WasteUrgency parseWasteUrgency(String raw) {
+        if (raw == null) {
+            return WasteUrgency.NORMAL;
+        }
+        try {
+            return WasteUrgency.valueOf(raw.trim().toUpperCase().replace(' ', '_'));
+        } catch (IllegalArgumentException e) {
+            return WasteUrgency.NORMAL;
         }
     }
 

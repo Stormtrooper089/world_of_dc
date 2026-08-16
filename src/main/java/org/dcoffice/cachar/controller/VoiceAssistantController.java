@@ -68,7 +68,7 @@ public class VoiceAssistantController {
         VoiceAssistantService.VoiceReply reply = voiceAssistantService.handleTurn(
                 request.getSessionId(), request.getTranscript(), citizenId, citizenMobileNumber, citizenName,
                 request.getLatitude(), request.getLongitude());
-        VoiceChatResponse response = new VoiceChatResponse(request.getSessionId(), reply.text, reply.actionTaken, reply.complaintNumber);
+        VoiceChatResponse response = new VoiceChatResponse(request.getSessionId(), reply.text, reply.actionTaken, reply.complaintNumber, reply.trackingNumber);
         return ApiResponse.success("ok", response);
     }
 
