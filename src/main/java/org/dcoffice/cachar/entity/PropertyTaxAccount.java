@@ -25,6 +25,16 @@ public class PropertyTaxAccount {
     private String address;
     private String propertyType;
     private String usageType;
+    // Municipal property data and land-record data are intentionally separate.
+    // These fields are populated only after the corresponding revenue record is verified.
+    private String landRecordStatus = "NOT_LINKED";
+    private String cadastralReference;
+    private String dagNumber;
+    private String pattaNumber;
+    private String ulpin;
+    private String mapSource;
+    private String officialRecordUrl;
+    private LocalDateTime landRecordUpdatedAt;
     private String financialYear;
     private BigDecimal annualTax = BigDecimal.ZERO;
     private BigDecimal arrears = BigDecimal.ZERO;
@@ -66,6 +76,22 @@ public class PropertyTaxAccount {
     public void setPropertyType(String propertyType) { this.propertyType = propertyType; }
     public String getUsageType() { return usageType; }
     public void setUsageType(String usageType) { this.usageType = usageType; }
+    public String getLandRecordStatus() { return landRecordStatus; }
+    public void setLandRecordStatus(String landRecordStatus) { this.landRecordStatus = landRecordStatus; }
+    public String getCadastralReference() { return cadastralReference; }
+    public void setCadastralReference(String cadastralReference) { this.cadastralReference = cadastralReference; }
+    public String getDagNumber() { return dagNumber; }
+    public void setDagNumber(String dagNumber) { this.dagNumber = dagNumber; }
+    public String getPattaNumber() { return pattaNumber; }
+    public void setPattaNumber(String pattaNumber) { this.pattaNumber = pattaNumber; }
+    public String getUlpin() { return ulpin; }
+    public void setUlpin(String ulpin) { this.ulpin = ulpin; }
+    public String getMapSource() { return mapSource; }
+    public void setMapSource(String mapSource) { this.mapSource = mapSource; }
+    public String getOfficialRecordUrl() { return officialRecordUrl; }
+    public void setOfficialRecordUrl(String officialRecordUrl) { this.officialRecordUrl = officialRecordUrl; }
+    public LocalDateTime getLandRecordUpdatedAt() { return landRecordUpdatedAt; }
+    public void setLandRecordUpdatedAt(LocalDateTime landRecordUpdatedAt) { this.landRecordUpdatedAt = landRecordUpdatedAt; }
     public String getFinancialYear() { return financialYear; }
     public void setFinancialYear(String financialYear) { this.financialYear = financialYear; }
     public BigDecimal getAnnualTax() { return annualTax; }

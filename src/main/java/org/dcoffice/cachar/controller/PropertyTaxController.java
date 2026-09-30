@@ -54,6 +54,14 @@ public class PropertyTaxController {
         return ResponseEntity.ok(ApiResponse.success("Property tax payment recorded", propertyTaxService.payPropertyTax(authentication.getName(), request.getHoldingNumber(), request.getPaymentMode())));
     }
 
+    @GetMapping("/property-tax/{holdingNumber}/land-parcel")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> landParcel(
+            @PathVariable String holdingNumber,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("Property land-record link retrieved", propertyTaxService.getLandParcel(authentication.getName(), holdingNumber)));
+    }
+
     @GetMapping("/property-tax/receipt/{receiptNumber}")
     public ResponseEntity<ApiResponse<PropertyTaxPaymentReceipt>> verifyReceipt(@PathVariable String receiptNumber) {
         return ResponseEntity.ok(ApiResponse.success("Receipt verified", propertyTaxService.verifyReceipt(receiptNumber)));

@@ -5,6 +5,7 @@ import org.dcoffice.cachar.entity.PropertyTaxAccount;
 import org.dcoffice.cachar.entity.PropertyTaxPaymentReceipt;
 import org.dcoffice.cachar.entity.PropertyTaxServiceRequest;
 import org.dcoffice.cachar.repository.CitizenRepository;
+import org.dcoffice.cachar.repository.PropertyTaxAccountRepository;
 import org.dcoffice.cachar.repository.PropertyTaxServiceRequestRepository;
 import org.dcoffice.cachar.service.propertytax.PropertyTaxProvider;
 import org.dcoffice.cachar.service.propertytax.UpyogClient;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -21,6 +23,7 @@ public class PropertyTaxService {
 
     private final List<PropertyTaxProvider> providers;
     private final CitizenRepository citizenRepository;
+    private final PropertyTaxAccountRepository propertyRepository;
     private final PropertyTaxServiceRequestRepository serviceRequestRepository;
     private final CounterService counterService;
     private final UpyogClient upyogClient;
@@ -29,6 +32,7 @@ public class PropertyTaxService {
     public PropertyTaxService(
             List<PropertyTaxProvider> providers,
             CitizenRepository citizenRepository,
+            PropertyTaxAccountRepository propertyRepository,
             PropertyTaxServiceRequestRepository serviceRequestRepository,
             CounterService counterService,
             UpyogClient upyogClient,
@@ -36,6 +40,7 @@ public class PropertyTaxService {
     ) {
         this.providers = providers;
         this.citizenRepository = citizenRepository;
+        this.propertyRepository = propertyRepository;
         this.serviceRequestRepository = serviceRequestRepository;
         this.counterService = counterService;
         this.upyogClient = upyogClient;
@@ -58,6 +63,41 @@ public class PropertyTaxService {
 
     public PropertyTaxPaymentReceipt verifyReceipt(String receiptNumber) {
         return provider().verifyReceipt(receiptNumber);
+    }
+
+    /**
+     * Returns municipal-to-land-record linkage metadata. It deliberately does not
+     * infer legal parcel boundaries when an authoritative cadastral source has not
+     * verified a link yet.
+     */
+    public Map<String, Object> getLandParcel(String citizenId, String holdingNumber) {
+        String normalizedHolding = holdingNumber == null ? "" : holdingNumber.trim().toUpperCase(Locale.ROOT);
+        PropertyTaxAccount property = propertyRepository.findByHoldingNumber(normalizedHolding)
+                .orElseThrow(() -> new IllegalArgumentException("No property found for holding number " + holdingNumber));
+        if (!citizenId.equals(property.getLinkedCitizenId())) {
+            throw new IllegalArgumentException("Please link this property to your SMC account before viewing its land record");
+        }
+
+        String status = property.getLandRecordStatus() == null || property.getLandRecordStatus().isBlank()
+                ? "NOT_LINKED" : property.getLandRecordStatus();
+        boolean officialBoundary = "OFFICIAL_BOUNDARY_VERIFIED".equalsIgnoreCase(status);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("holdingNumber", property.getHoldingNumber());
+        response.put("assessmentNumber", property.getAssessmentNumber());
+        response.put("status", status);
+        response.put("cadastralReference", property.getCadastralReference());
+        response.put("dagNumber", property.getDagNumber());
+        response.put("pattaNumber", property.getPattaNumber());
+        response.put("ulpin", property.getUlpin());
+        response.put("mapSource", property.getMapSource());
+        response.put("officialRecordUrl", property.getOfficialRecordUrl());
+        response.put("landRecordUpdatedAt", property.getLandRecordUpdatedAt());
+        response.put("officialBoundary", officialBoundary);
+        response.put("mapAvailable", officialBoundary);
+        response.put("disclaimer", officialBoundary
+                ? "Boundary supplied by the linked authorised cadastral record. The certified survey record remains the legal reference."
+                : "No authoritative cadastral boundary is linked to this municipal property yet. This view must not be used as a survey or ownership record.");
+        return response;
     }
 
     public Map<String, Object> dashboard() {
